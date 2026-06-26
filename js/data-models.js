@@ -195,31 +195,86 @@ export function formatExpressionJson(expr, indent = 2) {
   return JSON.stringify(expr, null, indent);
 }
 
-export const SOURCE_FILENAME = "source.json";
+export const SOURCE_FILENAME = "design.json";
+export const PROJECTS_MANIFEST_URL = "data/projects.json";
 
-/** 完整源码：音素 + 情绪共用同一文件 */
-export function validateSourceDoc(doc) {
+/** 兼容旧版 phoneme_expressions / emotion_expressions 字段 */
+export function normalizeSourceDocRaw(doc) {
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
-    throw new Error("source.json 顶层必须是对象");
+    throw new Error("JSON 顶层必须是对象");
   }
-  if (!Array.isArray(doc.phoneme_expressions) || !Array.isArray(doc.emotion_expressions)) {
-    throw new Error("source.json 需包含 phoneme_expressions 与 emotion_expressions 数组");
+  const phonemes = doc.phonemes ?? doc.phoneme_expressions;
+  const emotions = doc.emotions ?? doc.emotion_expressions;
+  if (!Array.isArray(phonemes) || !Array.isArray(emotions)) {
+    throw new Error("JSON 需包含 phonemes 与 emotions 数组");
   }
   return {
-    phoneme_expressions: validatePhonemeDoc(doc.phoneme_expressions),
-    emotion_expressions: validateScenesDoc(doc.emotion_expressions),
+    name: doc.name != null ? String(doc.name) : "未命名设计",
+    description: doc.description != null ? String(doc.description) : "",
+    phonemes,
+    emotions,
   };
 }
 
-/** Agent 合并源代码：{ phoneme_expressions, emotion_expressions } */
+export function defaultSourceDoc() {
+  return {
+    name: "未命名设计",
+    description: "",
+    phonemes: defaultPhonemeDoc(),
+    emotions: defaultScenesDoc(),
+  };
+}
+
+/** 完整源码：音素 + 情绪 + 设计说明 */
+export function validateSourceDoc(doc) {
+  const raw = normalizeSourceDocRaw(doc);
+  return {
+    name: raw.name,
+    description: raw.description,
+    phonemes: validatePhonemeDoc(raw.phonemes),
+    emotions: validateScenesDoc(raw.emotions),
+  };
+}
+
+/** 合并源代码到 state 字段 */
 export function applySourceDoc(doc, state) {
   if (!doc || typeof doc !== "object") throw new Error("无效源代码对象");
   const validated = validateSourceDoc(doc);
   return {
     ...state,
-    phonemeExpressions: validated.phoneme_expressions,
-    emotionExpressions: validated.emotion_expressions,
+    docName: validated.name,
+    docDescription: validated.description,
+    phonemeExpressions: validated.phonemes,
+    emotionExpressions: validated.emotions,
   };
+}
+
+export async function loadProjectCatalog() {
+  const res = await fetch(PROJECTS_MANIFEST_URL);
+  if (!res.ok) throw new Error(`加载项目列表失败: HTTP ${res.status}`);
+  const list = await res.json();
+  if (!Array.isArray(list)) throw new Error("projects.json 必须是数组");
+  return list.map((row, i) => {
+    if (!row?.file) throw new Error(`projects.json[${i}] 缺少 file 字段`);
+    return {
+      file: String(row.file),
+      name: row.name != null ? String(row.name) : row.file,
+      description: row.description != null ? String(row.description) : "",
+    };
+  });
+}
+
+export async function loadProjectFile(filename) {
+  const url = filename.includes("/") ? filename : `data/${filename}`;
+  return loadJsonUrl(url);
+}
+
+export function slugifyFilename(name, fallback = SOURCE_FILENAME) {
+  const base = String(name || "")
+    .trim()
+    .replace(/[^\w\u4e00-\u9fff-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base ? `${base}.json` : fallback;
 }
 
 export async function loadJsonUrl(url) {

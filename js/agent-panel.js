@@ -45,6 +45,62 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+async function copyToClipboard(text) {
+  const value = String(text ?? "");
+  if (!value) {
+    showToast("无内容可复制", "error");
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast("已复制", "success");
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.cssText = "position:fixed;left:-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      showToast("已复制", "success");
+      return true;
+    } catch {
+      showToast("复制失败", "error");
+      return false;
+    }
+  }
+}
+
+function createCopyButton(getText) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "agent-msg-copy";
+  btn.title = "复制";
+  btn.setAttribute("aria-label", "复制");
+  btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+  btn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const text = typeof getText === "function" ? getText() : getText;
+    copyToClipboard(text);
+  });
+  return btn;
+}
+
+function createMsgHead(label, copyText) {
+  const head = document.createElement("div");
+  head.className = "agent-msg-head";
+  const title = document.createElement("span");
+  title.className = "agent-msg-label";
+  title.textContent = label;
+  head.appendChild(title);
+  if (copyText != null) {
+    head.appendChild(createCopyButton(copyText));
+  }
+  return head;
+}
+
 function renderToolLine(container, m) {
   const row = document.createElement("div");
   const isErr = String(m.content).startsWith("ERROR:");
@@ -58,12 +114,19 @@ function renderToolLine(container, m) {
 function renderAgentGroup(group) {
   const div = document.createElement("div");
   div.className = "agent-msg agent-msg-assistant";
-  const head = document.createElement("div");
-  head.className = "agent-msg-head";
-  head.textContent = "Agent";
-  div.appendChild(head);
 
   const texts = group.filter((m) => m.role === "assistant" && m.content).map((m) => m.content);
+  const toolLines = group
+    .filter((m) => m.role === "tool")
+    .map((m) => {
+      const icon = m.toolName === "write" ? "✏️" : "📖";
+      const path = m.path ? `(${m.path})` : "";
+      return `${icon} ${m.toolName || "tool"}${path} → ${String(m.content).split("\n")[0]}`;
+    });
+  const copyText = [...texts, ...toolLines].filter(Boolean).join("\n\n");
+
+  div.appendChild(createMsgHead("Agent", copyText || null));
+
   if (texts.length) {
     const body = document.createElement("div");
     body.className = "agent-msg-body";
@@ -220,13 +283,10 @@ export function initAgentPanel(hooks) {
         if (m.role === "user") {
           const div = document.createElement("div");
           div.className = "agent-msg agent-msg-user";
-          const head = document.createElement("div");
-          head.className = "agent-msg-head";
-          head.textContent = "你";
+          div.appendChild(createMsgHead("你", m.content));
           const body = document.createElement("div");
           body.className = "agent-msg-body";
           body.innerHTML = `<pre>${escapeHtml(m.content)}</pre>`;
-          div.appendChild(head);
           div.appendChild(body);
           els.messages.appendChild(div);
           i++;
@@ -279,6 +339,7 @@ export function initAgentPanel(hooks) {
 
     head.appendChild(title);
     head.appendChild(badge);
+    head.appendChild(createCopyButton(() => pre.textContent));
     head.appendChild(abortBtn);
 
     const body = document.createElement("div");
@@ -444,50 +505,22 @@ export function initAgentPanel(hooks) {
     }
   }
 
-  function applyPairColumns(wPx) {
-    const pair = panel.closest(".right-pair");
-    if (!pair) return;
-    if (collapsed) {
-      pair.style.gridTemplateColumns = "1fr 36px";
-      pair.classList.add("agent-collapsed");
-    } else {
-      pair.style.gridTemplateColumns = `minmax(128px, 0.667fr) ${wPx}px`;
-      pair.classList.remove("agent-collapsed");
-    }
+  function applyLayoutCollapsed() {
+    const layout = document.querySelector(".layout");
+    if (!layout) return;
+    layout.classList.toggle("agent-collapsed", collapsed);
   }
 
   function setCollapsed(next) {
     collapsed = next;
     localStorage.setItem("visemesync.agent.collapsed", collapsed ? "1" : "0");
     panel.classList.toggle("collapsed", collapsed);
-    const w = localStorage.getItem("visemesync.agent.width") || "480";
-    applyPairColumns(w);
+    applyLayoutCollapsed();
     updateRunningUi();
   }
 
   function bindResize() {
-    const pair = panel.closest(".right-pair");
-    if (!pair || !els.resize) return;
-    let startX = 0;
-    let startW = 0;
-    els.resize.addEventListener("mousedown", (ev) => {
-      ev.preventDefault();
-      startX = ev.clientX;
-      startW = panel.offsetWidth;
-      const onMove = (e) => {
-        const w = Math.max(280, Math.min(840, startW + (startX - e.clientX)));
-        pair.style.gridTemplateColumns = `minmax(128px, 0.667fr) ${w}px`;
-      };
-      const onUp = () => {
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-        const cols = pair.style.gridTemplateColumns;
-        const m = cols.match(/(\d+)px\s*$/);
-        if (m) localStorage.setItem("visemesync.agent.width", m[1]);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    });
+    /* 固定宽度布局，不再拖动调整 Agent 列宽 */
   }
 
   els.toggle?.addEventListener("click", () => setCollapsed(!collapsed));
@@ -513,8 +546,7 @@ export function initAgentPanel(hooks) {
     }
   });
 
-  const savedW = localStorage.getItem("visemesync.agent.width") || "480";
-  applyPairColumns(savedW);
+  applyLayoutCollapsed();
 
   fillConfigForm();
   updateRunningUi();

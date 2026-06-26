@@ -1,5 +1,7 @@
 {
-  "phoneme_expressions": [
+  "name": "Deskbot 默认表情",
+  "description": "汉语拼音音素口型与基础情绪动画，适用于 Deskbot OLED 284×240",
+  "phonemes": [
     {
       "name": "i",
       "alias": [
@@ -786,7 +788,7 @@
       ]
     }
   ],
-  "emotion_expressions": [
+  "emotions": [
     {
       "name": "default",
       "title": "默认",

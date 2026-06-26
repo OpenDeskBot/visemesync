@@ -1,4 +1,4 @@
-/** Agent 系统 Prompt：音素表情 vs 情绪表情 + read/write 工具 */
+/** Agent 系统 Prompt：音素 vs 情绪 + read/write 工具 */
 
 const SHAPE_DOC = `
 图元 shape 类型：rect, rect_outline, circle, circle_outline, round_rect, round_rect_outline,
@@ -31,7 +31,7 @@ const EXPRESSION_SCHEMA = `
 `.trim();
 
 const PHONEME_ROLE = `
-【音素表情 phoneme_expressions】
+【音素表情 phonemes】
 - 用途：说话时按当前音素/拼音匹配口型与面部形态（Viseme）。
 - 典型场景：发「a」张大嘴、发「o」圆嘴、发「sil」闭嘴；也可调整眉眼配合口型。
 - 命名：name 常用单音素如 "a"、"ang"、"sil"；alias 放同组别名。
@@ -39,7 +39,7 @@ const PHONEME_ROLE = `
 `.trim();
 
 const EMOTION_ROLE = `
-【情绪表情 emotion_expressions】
+【情绪表情 emotions】
 - 用途：设备待机/交互时的情绪状态（开心、害羞、警惕等），非发音口型。
 - 典型场景：idle 待机、happy 开心、surprised 惊讶；常含多帧动画。
 - 命名：name 如 "idle"、"happy"；alias 如 "standby"。
@@ -51,37 +51,41 @@ const DIFF_DOC = `
 | 维度 | 音素表情 | 情绪表情 |
 | 触发 | 语音/TTS 音素匹配 | 情绪状态/场景切换 |
 | 主要改动 | 口型 mouth，必要时眼鼻 | 整体神态，常多帧 |
-| 源码字段 | phoneme_expressions | emotion_expressions |
+| 源码字段 | phonemes | emotions |
 | 结构 | 完全相同（name/alias/title/frames） | 相同 |
 
-音素与情绪共用同一源码文件 source.json，仅数组字段不同。
+音素与情绪共用同一 JSON 文件；顶层还有 name（设计名称）与 description（设计说明）。
 `.trim();
 
 const TOOL_DOC = `
 【虚拟文件与工具】
-- source.json：唯一源码文件
+- design.json：唯一源码文件
   {
-    "phoneme_expressions": [...],
-    "emotion_expressions": [...]
+    "name": "设计名称",
+    "description": "设计说明",
+    "phonemes": [...],
+    "emotions": [...]
   }
 
 工具（必须通过工具修改数据，禁止在回复中粘贴大段 JSON）：
-- read("source.json")：读取完整源码
-- write("source.json", content)：写入完整 JSON 并立即应用到编辑器
+- read("design.json")：读取完整源码
+- write("design.json", content)：写入完整 JSON 并立即应用到编辑器
 
 【工作流程】
-1. 先用 read("source.json") 读取当前源码
+1. 先用 read("design.json") 读取当前源码
 2. 用中文向用户说明修改思路
-3. 用 write("source.json", ...) 提交修改后的完整 JSON（增量修改，保留未提及的表情）
+3. 用 write("design.json", ...) 提交修改后的完整 JSON（增量修改，保留未提及的表情）
 4. write 成功后简要总结改动
 
 注意：name/alias 在同一列表内不可重复；rotated_rect 的 angle 仅 45° 倍数。
 `.trim();
 
-export function buildSourceDoc(phonemeExpressions, emotionExpressions) {
+export function buildSourceDoc(phonemeExpressions, emotionExpressions, meta = {}) {
   return {
-    phoneme_expressions: phonemeExpressions,
-    emotion_expressions: emotionExpressions,
+    name: meta.name != null ? String(meta.name) : "未命名设计",
+    description: meta.description != null ? String(meta.description) : "",
+    phonemes: phonemeExpressions,
+    emotions: emotionExpressions,
   };
 }
 
@@ -93,23 +97,27 @@ export function buildAgentSystemPrompt(ctx) {
     selectedIndex,
     phonemeCount,
     emotionCount,
+    docName,
+    docDescription,
   } = ctx;
 
   const focus =
     tab === "phoneme"
       ? `【当前编辑焦点：音素表情】
-用户正在编辑 phoneme_expressions[${selectedIndex}]（共 ${phonemeCount} 项）。
-优先修改 phoneme_expressions；除非用户明确要求，否则保持 emotion_expressions 不变。
+用户正在编辑 phonemes[${selectedIndex}]（共 ${phonemeCount} 项）。
+优先修改 phonemes；除非用户明确要求，否则保持 emotions 不变。
 当前选中：name="${currentExpression?.name}" title="${currentExpression?.title}"`
       : tab === "scene"
         ? `【当前编辑焦点：情绪表情】
-用户正在编辑 emotion_expressions[${selectedIndex}]（共 ${emotionCount} 项）。
-优先修改 emotion_expressions；除非用户明确要求，否则保持 phoneme_expressions 不变。
+用户正在编辑 emotions[${selectedIndex}]（共 ${emotionCount} 项）。
+优先修改 emotions；除非用户明确要求，否则保持 phonemes 不变。
 当前选中：name="${currentExpression?.name}" title="${currentExpression?.title}"`
         : `【当前编辑焦点：源码文件】
-用户在「源码文件」Tab 查看/编辑 source.json（音素与情绪共用）。`;
+用户在「源码文件」Tab 查看/编辑完整 JSON（音素与情绪共用）。`;
 
   return `你是 VisemeSync 表情 JSON 编辑助手，帮助用户修改 Deskbot 面部 OLED 表情数据。
+
+当前设计：name="${docName || ""}" description="${docDescription || ""}"
 
 ${EXPRESSION_SCHEMA}
 ${SHAPE_DOC}

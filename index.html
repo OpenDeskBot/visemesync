@@ -8,10 +8,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <h1>VisemeSync</h1>
-      <p class="sub">Deskbot 音素表情 / 情绪表情设计 · 导出 JSON</p>
-    </div>
+    <h1 class="brand-title"><span class="brand-name">VisemeSync</span><span class="brand-sep"> · </span><span class="brand-desc">Deskbot 音素/情绪表情设计 · 导出 JSON</span></h1>
     <div class="top-actions">
       <label class="inline">宽<input id="canvas-w" type="number" min="64" max="512" value="284" /></label>
       <label class="inline">高<input id="canvas-h" type="number" min="64" max="512" value="240" /></label>
@@ -20,6 +17,12 @@
       <button type="button" class="btn secondary" id="btn-load-local">恢复</button>
     </div>
   </header>
+
+  <div class="doc-bar">
+    <label class="doc-field">名称<input id="doc-name" type="text" placeholder="设计名称" /></label>
+    <label class="doc-field doc-field-grow">说明<input id="doc-description" type="text" placeholder="表情设计说明" /></label>
+    <button type="button" class="btn sm secondary" id="btn-open-picker">打开 / 新建</button>
+  </div>
 
   <nav class="tabs">
     <button type="button" class="tab-btn active" data-tab="phoneme">音素表情</button>
@@ -42,10 +45,10 @@
           <label>name<input id="p-name" type="text" placeholder="a" /></label>
           <label>title<input id="p-title" type="text" placeholder="音素 a" /></label>
           <label>alias<textarea id="p-alias" rows="2" placeholder="an, ang（逗号分隔）"></textarea></label>
-          <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情 · 与情绪表情共用 <code>source.json</code></p>
+          <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情</p>
         </div>
         <div class="io-row">
-          <button type="button" class="btn primary" id="btn-export-phoneme">导出 source.json</button>
+          <button type="button" class="btn primary" id="btn-export-phoneme">导出 JSON</button>
           <button type="button" class="btn secondary" id="btn-import-phoneme">导入</button>
           <input id="import-phoneme" type="file" accept="application/json,.json" hidden />
         </div>
@@ -61,14 +64,14 @@
           <label>name<input id="e-name" type="text" placeholder="idle" /></label>
           <label>title<input id="e-title" type="text" placeholder="日常待机" /></label>
           <label>alias<textarea id="e-alias" rows="2" placeholder="standby（逗号分隔）"></textarea></label>
-          <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情 · 与音素表情共用 <code>source.json</code></p>
+          <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情</p>
         </div>
         <div class="preset-row">
           <select id="preset-select"></select>
           <button type="button" class="btn sm" id="btn-add-preset">添加预设</button>
         </div>
         <div class="io-row">
-          <button type="button" class="btn primary" id="btn-export-scenes">导出 source.json</button>
+          <button type="button" class="btn primary" id="btn-export-scenes">导出 JSON</button>
           <button type="button" class="btn secondary" id="btn-import-scenes">导入</button>
           <input id="import-scenes" type="file" accept="application/json,.json" hidden />
         </div>
@@ -78,7 +81,7 @@
         <div class="panel-head">
           <h2>源码文件</h2>
         </div>
-        <p class="hint">音素与情绪共用 <code>source.json</code> · 切换 Tab 或点「保存」时自动同步 · 固定显示 64 行 · <kbd>Ctrl</kbd>+F 查找</p>
+        <p class="hint">完整 JSON 含 <code>name</code>、<code>description</code>、<code>phonemes</code>、<code>emotions</code> · 切换 Tab 或点「保存」时自动同步 · <kbd>Ctrl</kbd>+F 查找</p>
         <div class="io-row source-actions">
           <button type="button" class="btn sm" id="btn-copy-source">复制</button>
           <button type="button" class="btn sm" id="btn-format-source">格式化</button>
@@ -228,6 +231,24 @@
 
   <footer id="status-bar" class="status">就绪</footer>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <div id="project-picker" class="project-picker">
+    <div class="project-picker-dialog">
+      <header class="project-picker-head">
+        <h2>打开表情设计</h2>
+        <p class="muted">从 <code>data/</code> 目录选择预设，或导入 / 新建</p>
+      </header>
+      <div id="project-list" class="project-list"></div>
+      <div id="project-draft-row" class="project-actions hidden">
+        <button type="button" class="btn secondary" id="btn-load-draft">恢复本地草稿</button>
+      </div>
+      <div class="project-actions">
+        <button type="button" class="btn" id="btn-import-project">导入 JSON 文件</button>
+        <button type="button" class="btn primary" id="btn-new-project">新建空白设计</button>
+        <input id="import-project-file" type="file" accept="application/json,.json" hidden />
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="js/app.js"></script>
 </body>

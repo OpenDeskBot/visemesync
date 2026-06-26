@@ -20,6 +20,8 @@ import {
   expressionMatchKeys,
   SOURCE_FILENAME,
   validateSourceDoc,
+  defaultSourceDoc,
+  slugifyFilename,
 } from "./data-models.js";
 import {
   LAYER_LABELS,
@@ -49,6 +51,7 @@ import { sampleSceneAt, sceneTotalDuration } from "./frame-interpolation.js";
 import { buildSourceDoc } from "./agent-prompt.js";
 import { applySourceDoc } from "./data-models.js";
 import { initAgentPanel } from "./agent-panel.js";
+import { createProjectPicker } from "./project-picker.js";
 
 const SCENE_LAYERS = ["mouth", "eye_l", "eye_r", "nose", "extra"];
 const DRAG_MIME = "application/x-viseme-shape";
@@ -62,8 +65,11 @@ const LS_CANVAS_KEY = "visemesync.canvas";
 const state = {
   tab: "phoneme",
   canvas: { ...DEFAULT_CANVAS },
+  docName: "",
+  docDescription: "",
+  exportFilename: SOURCE_FILENAME,
   phonemeExpressions: [],
-  emotionExpressions: defaultScenesDoc(),
+  emotionExpressions: [],
   selectedPhonemeIdx: 0,
   selectedEmotionIdx: 0,
   selectedFrameIdx: 0,
@@ -84,6 +90,7 @@ const state = {
 const els = {};
 let sourceEditorUi = null;
 let agentPanel = null;
+let projectPicker = null;
 
 function getAgentContext() {
   const tab = state.tab;
@@ -99,7 +106,12 @@ function getAgentContext() {
     selectedIndex: idx,
     phonemeCount: phonemeList.length,
     emotionCount: emotionList.length,
-    sourceDoc: buildSourceDoc(phonemeList, emotionList),
+    sourceDoc: buildSourceDoc(state.phonemeExpressions, state.emotionExpressions, {
+      name: state.docName,
+      description: state.docDescription,
+    }),
+    docName: state.docName,
+    docDescription: state.docDescription,
   };
 }
 
@@ -123,21 +135,37 @@ function clampSelectedIndices() {
   clampFrameIdx();
 }
 
-function applySourceDocToState(doc) {
+function applySourceDocToState(doc, meta = {}) {
   const validated = validateSourceDoc(doc);
-  state.phonemeExpressions = validated.phoneme_expressions;
-  state.emotionExpressions = validated.emotion_expressions;
+  state.docName = validated.name;
+  state.docDescription = validated.description;
+  state.phonemeExpressions = validated.phonemes;
+  state.emotionExpressions = validated.emotions;
+  if (meta.file) state.exportFilename = meta.file;
+  else if (meta.from === "new") state.exportFilename = slugifyFilename(validated.name);
   state.jsonEditorDirty = false;
   state.sourceEditorDirty = false;
   clampSelectedIndices();
   checkExpressionConflicts(state.phonemeExpressions, true);
   checkExpressionConflicts(state.emotionExpressions, true);
+  syncDocMetaForm();
   saveSourceToLocalStorage(true);
 }
 
-function applyAgentSource(doc) {
-  applySourceDocToState(doc);
+function applyAgentSource(doc, meta) {
+  applySourceDocToState(doc, meta);
   renderAll();
+}
+
+function syncDocMetaForm() {
+  if (els.docName) els.docName.value = state.docName;
+  if (els.docDescription) els.docDescription.value = state.docDescription;
+}
+
+function applyDocMetaFromForm() {
+  if (els.docName) state.docName = els.docName.value.trim() || "未命名设计";
+  if (els.docDescription) state.docDescription = els.docDescription.value.trim();
+  state.exportFilename = slugifyFilename(state.docName, state.exportFilename);
 }
 
 /** 离开源码 Tab 前将编辑器内容同步到音素/情绪数据 */
@@ -157,50 +185,34 @@ function saveSourceToLocalStorage(silent = true) {
   localStorage.setItem(LS_CANVAS_KEY, JSON.stringify(state.canvas));
   if (!silent) {
     setStatus("已保存到 localStorage");
-    showToast("已保存 source.json 到 localStorage", "success");
+    showToast("已保存草稿到 localStorage", "success");
   }
   return true;
 }
 
 function loadSourceFromLocalStorage() {
   const raw = localStorage.getItem(LS_SOURCE_KEY);
-  if (!raw) throw new Error("localStorage 中无 source.json");
-  applyAgentSource(JSON.parse(raw));
+  if (!raw) throw new Error("localStorage 中无草稿");
+  applyAgentSource(JSON.parse(raw), { from: "draft" });
   const cv = localStorage.getItem(LS_CANVAS_KEY);
   if (cv) {
     state.canvas = JSON.parse(cv);
     els.canvasW.value = state.canvas.w;
     els.canvasH.value = state.canvas.h;
   }
-  setStatus("已从 localStorage 恢复 source.json");
-  showToast("已从 localStorage 恢复 source.json", "success");
+  setStatus("已从 localStorage 恢复草稿");
+  showToast("已从 localStorage 恢复草稿", "success");
 }
 
 async function loadInitialSource() {
-  const stored = localStorage.getItem(LS_SOURCE_KEY);
-  if (stored) {
-    const doc = validateSourceDoc(JSON.parse(stored));
-    state.phonemeExpressions = doc.phoneme_expressions;
-    state.emotionExpressions = doc.emotion_expressions;
-    setStatus("已从 localStorage 加载 source.json");
-    return;
-  }
-  try {
-    const doc = validateSourceDoc(await loadJsonUrl("data/source.json"));
-    state.phonemeExpressions = doc.phoneme_expressions;
-    state.emotionExpressions = doc.emotion_expressions;
-    saveSourceToLocalStorage(true);
-    setStatus("已加载 data/source.json");
-  } catch {
-    state.phonemeExpressions = defaultPhonemeDoc();
-    state.emotionExpressions = defaultScenesDoc();
-    saveSourceToLocalStorage(true);
-    setStatus("使用默认 source.json");
-  }
+  /* 由项目选择器在 boot 时加载，此处保留空实现供兼容 */
 }
 
 function getSourceDocObject() {
-  return buildSourceDoc(state.phonemeExpressions, state.emotionExpressions);
+  return buildSourceDoc(state.phonemeExpressions, state.emotionExpressions, {
+    name: state.docName,
+    description: state.docDescription,
+  });
 }
 
 function getSourceDocText() {
@@ -211,25 +223,31 @@ function exportSourceFile() {
   if ((state.tab === "phoneme" || state.tab === "scene") && !applyExpressionMetaFromForm()) {
     return false;
   }
+  applyDocMetaFromForm();
   const doc = validateSourceDoc(getSourceDocObject());
-  const phDups = findExpressionKeyConflicts(doc.phoneme_expressions);
-  const emDups = findExpressionKeyConflicts(doc.emotion_expressions);
+  const phDups = findExpressionKeyConflicts(doc.phonemes);
+  const emDups = findExpressionKeyConflicts(doc.emotions);
   if (phDups.length) {
-    showToast(formatExpressionConflictError(phDups, doc.phoneme_expressions), "error");
+    showToast(formatExpressionConflictError(phDups, doc.phonemes), "error");
     return false;
   }
   if (emDups.length) {
-    showToast(formatExpressionConflictError(emDups, doc.emotion_expressions), "error");
+    showToast(formatExpressionConflictError(emDups, doc.emotions), "error");
     return false;
   }
-  downloadJson(SOURCE_FILENAME, doc);
-  setStatus(`已导出 ${SOURCE_FILENAME}`);
-  showToast(`已导出 ${SOURCE_FILENAME}`, "success");
+  const filename = slugifyFilename(state.docName, state.exportFilename);
+  downloadJson(filename, doc);
+  state.exportFilename = filename;
+  setStatus(`已导出 ${filename}`);
+  showToast(`已导出 ${filename}`, "success");
   return true;
 }
 
 async function importSourceFile(file) {
-  applyAgentSource(validateSourceDoc(await readJsonFile(file)));
+  applyAgentSource(validateSourceDoc(await readJsonFile(file)), {
+    file: file.name,
+    from: "import",
+  });
   setStatus(`已导入 ${file.name}`);
   showToast(`已导入 ${file.name}`, "success");
   startScenePlayback();
@@ -1113,6 +1131,7 @@ function saveSourceEditor() {
 
 function renderAll() {
   pruneSelection();
+  syncDocMetaForm();
   syncStageVisibility();
   renderPhonemeList();
   renderSceneList();
@@ -1509,8 +1528,19 @@ function bindUi() {
 
   $("btn-save-local").onclick = () => {
     if ((state.tab === "phoneme" || state.tab === "scene") && !applyExpressionMetaFromForm()) return;
+    applyDocMetaFromForm();
     saveSourceToLocalStorage(false);
   };
+
+  bindMetaField(els.docName, () => {
+    applyDocMetaFromForm();
+    saveSourceToLocalStorage(true);
+  });
+  bindMetaField(els.docDescription, () => {
+    applyDocMetaFromForm();
+    saveSourceToLocalStorage(true);
+  });
+  $("btn-open-picker")?.addEventListener("click", () => projectPicker?.show());
 
   $("btn-load-local").onclick = () => {
     try {
@@ -1601,6 +1631,8 @@ async function boot() {
   els.importScenes = $("import-scenes");
   els.importSource = $("import-source");
   els.presetSelect = $("preset-select");
+  els.docName = $("doc-name");
+  els.docDescription = $("doc-description");
 
   els.canvasW.value = state.canvas.w;
   els.canvasH.value = state.canvas.h;
@@ -1634,9 +1666,21 @@ async function boot() {
   });
   agentPanel = initAgentPanel({
     getAgentContext,
-    applySourceDoc: applyAgentSource,
+    applySourceDoc: (doc) => applyAgentSource(doc),
   });
-  renderAll();
+  projectPicker = createProjectPicker({
+    onOpen(doc, meta) {
+      applySourceDocToState(doc, meta);
+      renderAll();
+      setStatus(`已打开：${state.docName}`);
+      showToast(`已打开：${state.docName}`, "success");
+    },
+    onError(e) {
+      setStatus(String(e.message || e), true);
+      showToast(String(e.message || e), "error");
+    },
+  });
+  await projectPicker.show();
 }
 
 boot();
