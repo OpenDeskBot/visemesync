@@ -671,6 +671,12 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   font-size: 11px;
   text-align: center;
 }
+.play-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .chip {

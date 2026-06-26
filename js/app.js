@@ -57,6 +57,7 @@ import {
 import { createProjectNameDialog } from "./project-name-dialog.js";
 import { exportProjectZip, exportDesignJson } from "./project-export.js";
 import { createEditHistory } from "./edit-history.js";
+import { buildSceneGifBytes, downloadGifBytes } from "./gif-export.js";
 
 const SCENE_LAYERS = ["mouth", "eye_l", "eye_r", "nose", "extra"];
 const DRAG_MIME = "application/x-viseme-shape";
@@ -100,6 +101,7 @@ let agentPanel = null;
 let projectPicker = null;
 let projectNameDialog = null;
 let autosaveTimer = null;
+let gifExporting = false;
 const editHistory = createEditHistory();
 
 function captureEditSnapshot() {
@@ -840,15 +842,61 @@ function refreshPlayPreview() {
   if (!frames?.length) {
     drawFrameThumb(els.playCanvas, DEFAULT_FACE);
     if (els.playTimeLabel) els.playTimeLabel.textContent = "无帧";
+    syncPlayPreviewActions();
     return;
   }
-  if (state.playback?.active) return;
+  if (state.playback?.active) {
+    syncPlayPreviewActions();
+    return;
+  }
 
   const fr = frames[state.selectedFrameIdx] ?? frames[0];
   drawFrameThumb(els.playCanvas, fr?.elements);
   const total = sceneTotalDuration(frames);
   if (els.playTimeLabel) {
     els.playTimeLabel.textContent = `帧 ${state.selectedFrameIdx + 1}/${frames.length} · ${fr?.ms ?? 0} ms · 总长 ${total} ms`;
+  }
+  syncPlayPreviewActions();
+}
+
+function syncPlayPreviewActions() {
+  const sc = getCurrentScene();
+  const hasFrames =
+    (state.tab === "phoneme" || state.tab === "scene") && Boolean(sc?.frames?.length);
+  if (els.btnDownloadGif) {
+    els.btnDownloadGif.disabled = state.readOnly || !hasFrames || gifExporting;
+  }
+}
+
+async function downloadPlayPreviewGif() {
+  if (state.readOnly) {
+    showToast("只读模式无法导出", "error");
+    return;
+  }
+  const sc = getCurrentScene();
+  if (!sc?.frames?.length) {
+    showToast("无帧可导出", "error");
+    return;
+  }
+  if (gifExporting) return;
+
+  gifExporting = true;
+  syncPlayPreviewActions();
+  showToast("正在生成 GIF…", "success");
+  try {
+    stopScenePlayback();
+    await new Promise((r) => setTimeout(r, 0));
+    const bytes = buildSceneGifBytes(sc.frames, state.canvas.w, state.canvas.h);
+    const expr = getCurrentExpression();
+    const base = expr?.name || expr?.title || "animation";
+    downloadGifBytes(bytes, base);
+    showToast("GIF 已下载", "success");
+    refreshPlayPreview();
+  } catch (e) {
+    showToast(`导出失败: ${e.message || e}`, "error");
+  } finally {
+    gifExporting = false;
+    syncPlayPreviewActions();
   }
 }
 
@@ -1876,6 +1924,7 @@ function bindUi() {
   $("btn-add-frame")?.addEventListener("click", () => addSceneFrame());
   $("btn-del-frame")?.addEventListener("click", () => deleteSceneFrame());
   $("btn-play-scene")?.addEventListener("click", () => startScenePlayback());
+  $("btn-download-gif")?.addEventListener("click", () => downloadPlayPreviewGif());
   $("btn-stop-play")?.addEventListener("click", () => stopScenePlayback());
   els.frameMs?.addEventListener("change", () => {
     const sc = getCurrentScene();
@@ -2023,6 +2072,7 @@ async function boot() {
   els.playCanvas = $("play-canvas");
   els.playTimeLabel = $("play-time-label");
   els.btnStopPlay = $("btn-stop-play");
+  els.btnDownloadGif = $("btn-download-gif");
   els.phonemeList = $("phoneme-list");
   els.sceneList = $("scene-list");
   els.shapePalette = $("shape-palette");

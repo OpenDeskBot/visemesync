@@ -24,6 +24,21 @@ async function captureFrames(page, canvasSel, count, intervalMs) {
   return frames;
 }
 
+async function openDefaultProject(page) {
+  await wait(800);
+  const catalogCard = await page.$("#catalog-list .project-card");
+  if (!catalogCard) return false;
+  await catalogCard.click();
+  await wait(400);
+  const name = `preview-${Date.now().toString(36)}`;
+  await page.waitForSelector("#save-as-filename", { visible: true, timeout: 5000 });
+  await page.click("#save-as-filename", { clickCount: 3 });
+  await page.type("#save-as-filename", name);
+  await page.click("#btn-save-as-confirm");
+  await wait(900);
+  return true;
+}
+
 async function main() {
   await mkdir(DOCS, { recursive: true });
 
@@ -35,7 +50,10 @@ async function main() {
   await page.setViewport({ width: 1600, height: 900, deviceScaleFactor: 1 });
 
   await page.goto(BASE, { waitUntil: "networkidle0", timeout: 30000 });
-  await wait(800);
+  if (!(await openDefaultProject(page))) {
+    throw new Error("无法打开内置模板，请确认 data/projects.json 与 HTTP 服务正常");
+  }
+  await wait(400);
 
   await page.screenshot({ path: path.join(DOCS, "preview-main.png"), fullPage: false });
 
