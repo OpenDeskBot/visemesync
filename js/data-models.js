@@ -5,10 +5,10 @@ import { quantizeElementsColors } from "./oled-renderer.js";
 export const DEFAULT_CANVAS = { w: 284, h: 240 };
 
 export const DEFAULT_FACE = {
-  eye_l: [{ shape: "ellipse_fill", x: 86, y: 97, rw: 17, rh: 17, c: 32348 }],
-  eye_r: [{ shape: "ellipse_fill", x: 198, y: 97, rw: 17, rh: 17, c: 28122 }],
+  eye_l: [{ shape: "ellipse_fill", x: 86, y: 97, rw: 11, rh: 11, c: 28383 }],
+  eye_r: [{ shape: "ellipse_fill", x: 198, y: 97, rw: 11, rh: 11, c: 28095 }],
   nose: [],
-  mouth: [{ shape: "round_rect_outline", x: 178, y: 156, w: 40, h: 12, radius: 6, c: 19605 }],
+  mouth: [{ shape: "round_rect_outline", x: 158, y: 156, w: 40, h: 12, radius: 6, c: 19605 }],
   extra: [],
 };
 

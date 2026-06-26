@@ -1,4 +1,6 @@
-/** Agent 虚拟文件系统：read / write 工具（统一映射 source.json） */
+/** Agent 虚拟文件系统：read / patch / write 工具（统一映射 source.json） */
+
+import { applySourcePatch, formatPatchResultMessage } from "./agent-patch.js";
 
 export const VIRTUAL_PATHS = ["source.json"];
 
@@ -7,7 +9,8 @@ export const AGENT_TOOLS = [
     type: "function",
     function: {
       name: "read",
-      description: "读取虚拟源码 source.json（含 name、description、phonemes、emotions）。",
+      description:
+        "可选：再次读取 source.json（紧凑 JSON）。完整源码已嵌入 system prompt，通常无需调用。",
       parameters: {
         type: "object",
         properties: {
@@ -24,9 +27,33 @@ export const AGENT_TOOLS = [
   {
     type: "function",
     function: {
+      name: "patch",
+      description:
+        "增量更新 source.json（推荐）。仅提交变更的表情或元信息，客户端自动合并进当前源码；按 name upsert 表情。",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            enum: VIRTUAL_PATHS,
+            description: "虚拟文件路径，固定为 source.json",
+          },
+          patch: {
+            type: "string",
+            description:
+              "JSON 字符串：可选 name/description；phonemes/emotions 为要新增或替换的完整表情对象数组；removePhonemes/removeEmotions 为要删除的 name 列表",
+          },
+        },
+        required: ["path", "patch"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "write",
       description:
-        "写入 source.json 并立即应用到 VisemeSync 编辑器。content 为完整 JSON 字符串，含 name、description、phonemes、emotions。",
+        "全量替换 source.json。仅在大改或 patch 不便时使用；content 为完整 JSON 字符串。",
       parameters: {
         type: "object",
         properties: {
@@ -37,7 +64,7 @@ export const AGENT_TOOLS = [
           },
           content: {
             type: "string",
-            description: "JSON 字符串（非 markdown 代码块）",
+            description: "完整 JSON 字符串（非 markdown 代码块）",
           },
         },
         required: ["path", "content"],
@@ -46,6 +73,11 @@ export const AGENT_TOOLS = [
   },
 ];
 
+/** 紧凑序列化，减少 token 体积 */
+export function compactJsonStringify(value) {
+  return JSON.stringify(value);
+}
+
 export function createToolExecutor(hooks) {
   const vfs = {
     read(path) {
@@ -53,7 +85,17 @@ export function createToolExecutor(hooks) {
         throw new Error(`未知路径: ${path}，仅支持 source.json`);
       }
       const doc = hooks.getAgentContext().sourceDoc;
-      return JSON.stringify(doc, null, 2);
+      return compactJsonStringify(doc);
+    },
+
+    patch(path, patchContent) {
+      if (path !== "source.json") {
+        throw new Error(`未知路径: ${path}，仅支持 source.json`);
+      }
+      const base = hooks.getAgentContext().sourceDoc;
+      const result = applySourcePatch(base, patchContent);
+      hooks.applySourceDoc(result.doc);
+      return formatPatchResultMessage(result);
     },
 
     write(path, content) {
@@ -67,12 +109,13 @@ export function createToolExecutor(hooks) {
         throw new Error(`content 不是合法 JSON: ${e.message || e}`);
       }
       hooks.applySourceDoc(parsed);
-      return `已写入并应用 source.json（${parsed.phonemes?.length ?? "?"} 音素 + ${parsed.emotions?.length ?? "?"} 情绪）`;
+      return `已 write 全量应用 source.json（${parsed.phonemes?.length ?? "?"} 音素 + ${parsed.emotions?.length ?? "?"} 情绪）`;
     },
   };
 
   return async function executeTool(name, args) {
     if (name === "read") return vfs.read(args.path);
+    if (name === "patch") return vfs.patch(args.path, args.patch);
     if (name === "write") return vfs.write(args.path, args.content);
     throw new Error(`未知工具: ${name}`);
   };

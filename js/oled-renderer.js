@@ -189,32 +189,56 @@ export const PALETTE_COLORS = [
   { c: 52845, label: "灰" },
 ].map(({ c, label }) => ({ c: quantizeColor256(c), label }));
 
-export function drawShape(ctx, shape, stroke, fillAlpha = 0.25) {
+export function isFilledShape(type) {
+  const sh = normalizeShapeType(type);
+  return (
+    sh === "rect" ||
+    sh === "circle" ||
+    sh === "round_rect" ||
+    sh === "ellipse_fill" ||
+    sh === "triangle_fill" ||
+    sh === "rotated_rect_fill" ||
+    sh === "pixel"
+  );
+}
+
+export function drawShape(ctx, shape, options = {}) {
   if (!shape || !ctx) return;
+  const { highlightStroke = null, dimmed = false } = options;
   const s = shape;
   const sh = normalizeShapeType(s.shape);
-  const fillColor = rgb565ToCss(s.c ?? 65535);
-  ctx.strokeStyle = stroke || "#888";
-  ctx.fillStyle = fillColor.replace("rgb", "rgba").replace(")", `,${fillAlpha})`);
-  ctx.lineWidth = 1;
+  const filled = isFilledShape(sh);
+  const color = rgb565ToCss(s.c ?? 65535);
+
+  ctx.save();
+  if (dimmed) ctx.globalAlpha = 0.38;
+
+  ctx.lineWidth = highlightStroke ? 2 : 1;
+  ctx.strokeStyle = highlightStroke || color;
+  ctx.fillStyle = color;
 
   if (sh === "circle" || sh === "circle_outline") {
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    if (sh === "circle") ctx.fill();
-    ctx.stroke();
+    if (filled) ctx.fill();
+    else ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "rect" || sh === "rect_outline") {
-    if (sh === "rect") ctx.fillRect(s.x, s.y, s.w, s.h);
-    ctx.strokeRect(s.x, s.y, s.w, s.h);
+    if (filled) ctx.fillRect(s.x, s.y, s.w, s.h);
+    else ctx.strokeRect(s.x, s.y, s.w, s.h);
+    if (filled && highlightStroke) ctx.strokeRect(s.x, s.y, s.w, s.h);
+    ctx.restore();
     return;
   }
   if (sh === "round_rect" || sh === "round_rect_outline") {
     const rad = Math.min(Number(s.radius ?? s.r) || 0, s.w / 2, s.h / 2);
     roundRectPath(ctx, s.x, s.y, s.w, s.h, rad);
-    if (sh === "round_rect") ctx.fill();
-    ctx.stroke();
+    if (filled) ctx.fill();
+    else ctx.stroke();
+    if (filled && highlightStroke) ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "ellipse" || sh === "ellipse_fill") {
@@ -222,8 +246,10 @@ export function drawShape(ctx, shape, stroke, fillAlpha = 0.25) {
     const ry = s.rh ?? s.h ?? s.r ?? 4;
     ctx.beginPath();
     ctx.ellipse(s.x, s.y, rx, ry, 0, 0, Math.PI * 2);
-    if (sh === "ellipse_fill") ctx.fill();
-    ctx.stroke();
+    if (filled) ctx.fill();
+    else ctx.stroke();
+    if (filled && highlightStroke) ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "line") {
@@ -231,11 +257,12 @@ export function drawShape(ctx, shape, stroke, fillAlpha = 0.25) {
     ctx.moveTo(s.x1, s.y1);
     ctx.lineTo(s.x2, s.y2);
     ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "pixel") {
-    ctx.fillStyle = fillColor;
     ctx.fillRect(s.x, s.y, 1, 1);
+    ctx.restore();
     return;
   }
   if (sh === "hline") {
@@ -243,6 +270,7 @@ export function drawShape(ctx, shape, stroke, fillAlpha = 0.25) {
     ctx.moveTo(s.x, s.y);
     ctx.lineTo(s.x + s.w, s.y);
     ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "vline") {
@@ -250,6 +278,7 @@ export function drawShape(ctx, shape, stroke, fillAlpha = 0.25) {
     ctx.moveTo(s.x, s.y);
     ctx.lineTo(s.x, s.y + s.h);
     ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "triangle" || sh === "triangle_fill") {
@@ -258,20 +287,25 @@ export function drawShape(ctx, shape, stroke, fillAlpha = 0.25) {
     ctx.lineTo(s.x1, s.y1);
     ctx.lineTo(s.x2, s.y2);
     ctx.closePath();
-    if (sh === "triangle_fill") ctx.fill();
-    ctx.stroke();
+    if (filled) ctx.fill();
+    else ctx.stroke();
+    if (filled && highlightStroke) ctx.stroke();
+    ctx.restore();
     return;
   }
   if (sh === "rotated_rect_outline" || sh === "rotated_rect_fill") {
-    ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(((s.angle || 0) * Math.PI) / 180);
     const hw = s.w / 2;
     const hh = s.h / 2;
-    if (sh === "rotated_rect_fill") ctx.fillRect(-hw, -hh, s.w, s.h);
-    ctx.strokeRect(-hw, -hh, s.w, s.h);
+    if (filled) ctx.fillRect(-hw, -hh, s.w, s.h);
+    else ctx.strokeRect(-hw, -hh, s.w, s.h);
+    if (filled && highlightStroke) ctx.strokeRect(-hw, -hh, s.w, s.h);
     ctx.restore();
+    return;
   }
+
+  ctx.restore();
 }
 
 function roundRectPath(ctx, x, y, w, h, rad) {
@@ -310,9 +344,10 @@ export function drawFace(ctx, elements, options = {}) {
     for (let i = 0; i < list.length; i += 1) {
       const shape = list[i];
       const isHi = hiList.some((h) => h.layer === key && h.index === i);
-      const stroke = isHi ? "#ff0" : locked ? "rgba(140,160,180,0.55)" : LAYER_COLORS[key] || "#888";
-      const alpha = isHi ? 0.45 : locked ? 0.12 : 0.22;
-      drawShape(ctx, shape, stroke, alpha);
+      drawShape(ctx, shape, {
+        highlightStroke: isHi ? "#ff0" : null,
+        dimmed: locked,
+      });
     }
   }
   const ht =

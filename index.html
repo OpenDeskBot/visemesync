@@ -13,6 +13,8 @@
       <label class="inline">宽<input id="canvas-w" type="number" min="64" max="512" value="284" /></label>
       <label class="inline">高<input id="canvas-h" type="number" min="64" max="512" value="240" /></label>
       <span id="canvas-meta" class="mono muted">284 × 240</span>
+      <button type="button" class="btn secondary" id="btn-undo" title="撤销 (Ctrl+Z)" disabled>撤销</button>
+      <button type="button" class="btn secondary" id="btn-redo" title="重做 (Ctrl+Shift+Z)" disabled>重做</button>
       <button type="button" class="btn" id="btn-save-design">保存</button>
       <button type="button" class="btn secondary" id="btn-save-as">另存为</button>
       <button type="button" class="btn secondary" id="btn-export-project">导出项目</button>
@@ -56,7 +58,10 @@
       <section class="panel-tab hidden" data-panel="scene">
         <div class="panel-head">
           <h2>情绪表情</h2>
-          <button type="button" class="btn sm" id="btn-add-scene">+ 表情</button>
+          <div class="row">
+            <button type="button" class="btn sm" id="btn-add-scene">+ 表情</button>
+            <button type="button" class="btn sm danger" id="btn-del-scene">删</button>
+          </div>
         </div>
         <div id="scene-list" class="list"></div>
         <div id="scene-meta" class="meta-form">
@@ -71,7 +76,7 @@
         <div class="panel-head">
           <h2>源码文件</h2>
         </div>
-        <p class="hint">完整 JSON 含 <code>name</code>、<code>description</code>、<code>phonemes</code>、<code>emotions</code> · Agent 读写虚拟文件 <code>source.json</code> · <kbd>Ctrl</kbd>+F 查找</p>
+        <p class="hint">完整 JSON 含 <code>name</code>、<code>description</code>、<code>phonemes</code>、<code>emotions</code> · Agent 优先 <code>patch</code> 增量修改 · <kbd>Ctrl</kbd>+F 查找</p>
         <div class="io-row source-actions">
           <button type="button" class="btn sm" id="btn-copy-source">复制</button>
           <button type="button" class="btn sm" id="btn-format-source">格式化</button>

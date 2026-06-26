@@ -56,6 +56,7 @@ import {
 } from "./project-store.js";
 import { createProjectNameDialog } from "./project-name-dialog.js";
 import { exportProjectZip, exportDesignJson } from "./project-export.js";
+import { createEditHistory } from "./edit-history.js";
 
 const SCENE_LAYERS = ["mouth", "eye_l", "eye_r", "nose", "extra"];
 const DRAG_MIME = "application/x-viseme-shape";
@@ -99,6 +100,83 @@ let agentPanel = null;
 let projectPicker = null;
 let projectNameDialog = null;
 let autosaveTimer = null;
+const editHistory = createEditHistory();
+
+function captureEditSnapshot() {
+  return {
+    docName: state.docName,
+    docDescription: state.docDescription,
+    phonemeExpressions: structuredClone(state.phonemeExpressions),
+    emotionExpressions: structuredClone(state.emotionExpressions),
+    canvas: { ...state.canvas },
+    selectedPhonemeIdx: state.selectedPhonemeIdx,
+    selectedEmotionIdx: state.selectedEmotionIdx,
+    selectedFrameIdx: state.selectedFrameIdx,
+    selection: structuredClone(state.selection),
+    editLayer: state.editLayer,
+    selectedColor: state.selectedColor,
+  };
+}
+
+function restoreEditSnapshot(snap) {
+  stopScenePlayback();
+  state.docName = snap.docName;
+  state.docDescription = snap.docDescription;
+  state.phonemeExpressions = snap.phonemeExpressions;
+  state.emotionExpressions = snap.emotionExpressions;
+  state.canvas = { ...snap.canvas };
+  state.selectedPhonemeIdx = snap.selectedPhonemeIdx;
+  state.selectedEmotionIdx = snap.selectedEmotionIdx;
+  state.selectedFrameIdx = snap.selectedFrameIdx;
+  state.selection = structuredClone(snap.selection);
+  if (snap.editLayer != null) state.editLayer = snap.editLayer;
+  if (snap.selectedColor != null) state.selectedColor = snap.selectedColor;
+  state.jsonEditorDirty = false;
+  state.sourceEditorDirty = false;
+  if (els.canvasW) els.canvasW.value = state.canvas.w;
+  if (els.canvasH) els.canvasH.value = state.canvas.h;
+  if (els.layerSelect) els.layerSelect.value = state.editLayer;
+  clampSelectedIndices();
+  checkExpressionConflicts(state.phonemeExpressions, false);
+  checkExpressionConflicts(state.emotionExpressions, false);
+  renderAll();
+  scheduleAutosave();
+}
+
+function updateUndoRedoButtons() {
+  const ro = state.readOnly;
+  if (els.btnUndo) els.btnUndo.disabled = ro || !editHistory.canUndo();
+  if (els.btnRedo) els.btnRedo.disabled = ro || !editHistory.canRedo();
+}
+
+function pushUndo() {
+  if (state.readOnly) return;
+  editHistory.push(captureEditSnapshot());
+  updateUndoRedoButtons();
+}
+
+function clearEditHistory() {
+  editHistory.clear();
+  updateUndoRedoButtons();
+}
+
+function undoEdit() {
+  if (state.readOnly || !editHistory.canUndo()) return false;
+  const prev = editHistory.undo(captureEditSnapshot());
+  if (prev) restoreEditSnapshot(prev);
+  updateUndoRedoButtons();
+  showToast("已撤销", "success");
+  return true;
+}
+
+function redoEdit() {
+  if (state.readOnly || !editHistory.canRedo()) return false;
+  const next = editHistory.redo(captureEditSnapshot());
+  if (next) restoreEditSnapshot(next);
+  updateUndoRedoButtons();
+  showToast("已重做", "success");
+  return true;
+}
 
 function scheduleAutosave() {
   if (state.readOnly || !state.projectId || !state.projectName) return;
@@ -173,6 +251,7 @@ function applySourceDocToState(doc, meta = {}) {
 }
 
 function applyAgentSource(doc, meta) {
+  pushUndo();
   applySourceDocToState(doc, meta);
   renderAll();
 }
@@ -228,6 +307,7 @@ function openProjectRecord(project, { readOnly = false } = {}) {
   });
 
   syncDesignUi();
+  clearEditHistory();
   renderAll();
   setStatus(readOnly ? `已打开内置模板（只读）：${project.projectName}` : `已打开项目：${project.projectName}`);
   showToast(readOnly ? `已打开内置模板（只读）` : `已打开项目：${project.projectName}`, "success");
@@ -522,6 +602,7 @@ function exportCurrentDesignJson() {
 function applySourceEditorIfDirty() {
   if (!state.sourceEditorDirty || !els.sourceEditor) return true;
   try {
+    pushUndo();
     applySourceDocToState(JSON.parse(els.sourceEditor.value));
     return true;
   } catch (e) {
@@ -710,6 +791,7 @@ function findShapesInRect(rect) {
 
 function moveSelectedShapes(dx, dy) {
   if (!state.selection.items.length) return;
+  pushUndo();
   for (const item of state.selection.items) {
     const shape = getShapeByRef(item);
     if (shape) moveShape(shape, dx, dy);
@@ -823,6 +905,7 @@ function selectFrame(idx) {
 function addSceneFrame() {
   const sc = getCurrentScene();
   if (!sc) return;
+  pushUndo();
   if (!sc.frames) sc.frames = [];
   const cur = sc.frames[state.selectedFrameIdx];
   sc.frames.push(defaultFrame(cur?.elements || DEFAULT_FACE, cur?.ms ?? 800));
@@ -838,6 +921,7 @@ function deleteSceneFrame() {
     showToast("至少保留 1 帧", "error");
     return;
   }
+  pushUndo();
   sc.frames.splice(state.selectedFrameIdx, 1);
   state.selectedFrameIdx = Math.max(0, state.selectedFrameIdx - 1);
   clearSelection();
@@ -912,6 +996,7 @@ function renderFrameTimeline() {
     handle.addEventListener("mousedown", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      pushUndo();
       state.gapDrag = {
         frameIdx: idx,
         startX: ev.clientX,
@@ -987,6 +1072,7 @@ function setSelectedColor(c) {
     els.colorCustomLabel.textContent = `${rgb565ToHex(q)} · ${q}`;
   }
   if (state.selection.items.length) {
+    pushUndo();
     for (const item of state.selection.items) {
       const shape = getShapeByRef(item);
       if (shape) shape.c = q;
@@ -1004,6 +1090,7 @@ function addShapeAt(type, x, y, layer = effectiveAddLayer()) {
     showToast("当前模式下无法添加到该图层", "error");
     return null;
   }
+  pushUndo();
   const shape = defaultShapeAt(type, layer, x, y, state.selectedColor);
   normalizeShapeAngle(shape);
   list.push(shape);
@@ -1014,6 +1101,7 @@ function addShapeAt(type, x, y, layer = effectiveAddLayer()) {
 
 function deleteSelectedShapes() {
   if (!state.selection.items.length) return false;
+  pushUndo();
   const byLayer = {};
   for (const item of state.selection.items) {
     (byLayer[item.layer] ||= new Set()).add(item.index);
@@ -1055,6 +1143,7 @@ function pasteShape() {
     showToast("剪贴板为空", "error");
     return false;
   }
+  pushUndo();
   const newItems = [];
   for (const entry of state.clipboard.shapes) {
     const layer = entry.layer || effectiveAddLayer();
@@ -1108,7 +1197,7 @@ function drawShapePreview(ctx, type, color) {
     shape.y = 3;
     shape.h = 14;
   }
-  drawShape(ctx, shape, rgb565ToCss(color), sh.includes("outline") || sh === "line" || sh === "hline" || sh === "vline" ? 0.15 : 0.75);
+  drawShape(ctx, shape);
 }
 
 function renderShapePalette() {
@@ -1245,7 +1334,7 @@ function renderProps() {
   }
   if (selCount > 1) {
     box.innerHTML = `<div class="prop-head">${selCount} 个图元已选中</div>
-      <p class="muted">拖动整体平移 · 方向键 1px · Shift+方向键 10px<br><kbd>Ctrl</kbd>+C/V · <kbd>Del</kbd> 删除</p>
+      <p class="muted">拖动整体平移 · 方向键 1px · Shift+方向键 10px<br><kbd>Ctrl</kbd>+C/V · <kbd>Del</kbd> 删除 · <kbd>Ctrl</kbd>+Z 撤销</p>
       <div class="prop-actions">
         <button type="button" class="btn sm" id="prop-copy">复制</button>
         <button type="button" class="btn sm" id="prop-paste">粘贴</button>
@@ -1258,7 +1347,7 @@ function renderProps() {
   }
   const ref = getSelectedShapeRef();
   if (!ref) {
-    box.innerHTML = `<p class="muted">框选或点击图元 · 空白处拖出选框<br><small><kbd>Ctrl</kbd>+C/V · <kbd>Del</kbd> · 方向键平移</small></p>`;
+    box.innerHTML = `<p class="muted">框选或点击图元 · 空白处拖出选框<br><small><kbd>Ctrl</kbd>+C/V · <kbd>Del</kbd> · 方向键平移 · <kbd>Ctrl</kbd>+Z 撤销</small></p>`;
     return;
   }
   const shape = ref.list[ref.index];
@@ -1352,6 +1441,7 @@ function renderJsonEditor() {
 
 function saveJsonEditor() {
   try {
+    pushUndo();
     if (!applyExpressionMetaFromForm()) return;
 
     const expr = state.jsonEditorDirty
@@ -1448,6 +1538,7 @@ function saveSourceEditor() {
     return;
   }
   try {
+    pushUndo();
     applySourceDocToState(JSON.parse(els.sourceEditor.value));
     renderAll();
     if (state.projectId && state.projectName) {
@@ -1492,6 +1583,7 @@ function renderAll() {
   }
   agentPanel?.refresh();
   scheduleAutosave();
+  updateUndoRedoButtons();
 }
 
 function canvasPoint(ev) {
@@ -1541,6 +1633,7 @@ function bindCanvas() {
       const shape = selRef.list[selRef.index];
       const handle = hitTestHandle(shape, p.x, p.y);
       if (handle) {
+        pushUndo();
         state.drag = { mode: "handle", handle: handle.id, ref: selRef, lastX: p.x, lastY: p.y };
         canvas.style.cursor = handle.cursor || "default";
         return;
@@ -1553,6 +1646,7 @@ function bindCanvas() {
       if (!isShapeSelected(hit.layer, hit.index)) {
         setSelection([{ layer: hit.layer, index: hit.index }]);
       }
+      pushUndo();
       state.drag = {
         mode: "move",
         lastX: p.x,
@@ -1651,6 +1745,7 @@ function bindCanvas() {
       ev.preventDefault();
       const ref = getPrimarySelectionRef();
       if (!ref) return;
+      pushUndo();
       const shape = ref.list[ref.index];
       const factor = ev.deltaY < 0 ? 1.08 : 0.92;
       const p = canvasPoint(ev);
@@ -1693,6 +1788,20 @@ function bindCanvas() {
 
 function bindKeyboard() {
   window.addEventListener("keydown", (ev) => {
+    const mod = ev.ctrlKey || ev.metaKey;
+    if (mod && ev.key === "z" && !ev.shiftKey) {
+      if (ev.target.matches("input, textarea, select")) return;
+      ev.preventDefault();
+      undoEdit();
+      return;
+    }
+    if (mod && (ev.key === "y" || (ev.key === "z" && ev.shiftKey) || (ev.key === "Z" && ev.shiftKey))) {
+      if (ev.target.matches("input, textarea, select")) return;
+      ev.preventDefault();
+      redoEdit();
+      return;
+    }
+
     if (ev.target.matches("input, textarea, select")) return;
 
     if (ev.key === "Delete" || ev.key === "Backspace") {
@@ -1746,11 +1855,13 @@ function bindUi() {
   });
 
   els.canvasW.onchange = () => {
+    pushUndo();
     state.canvas.w = Math.max(64, Number(els.canvasW.value) || 284);
     syncCanvasDisplaySize();
     renderAll();
   };
   els.canvasH.onchange = () => {
+    pushUndo();
     state.canvas.h = Math.max(64, Number(els.canvasH.value) || 240);
     syncCanvasDisplaySize();
     renderAll();
@@ -1770,6 +1881,7 @@ function bindUi() {
     const sc = getCurrentScene();
     const fr = sc?.frames?.[state.selectedFrameIdx];
     if (!fr) return;
+    pushUndo();
     fr.ms = Math.max(MIN_FRAME_MS, Number(els.frameMs.value) || 800);
     state.jsonEditorDirty = false;
     renderFrameTimeline();
@@ -1783,6 +1895,7 @@ function bindUi() {
   }
 
   $("btn-add-phoneme").onclick = () => {
+    pushUndo();
     state.phonemeExpressions.push(defaultPhonemeExpression("a"));
     state.selectedPhonemeIdx = state.phonemeExpressions.length - 1;
     state.jsonEditorDirty = false;
@@ -1791,6 +1904,7 @@ function bindUi() {
 
   $("btn-del-phoneme").onclick = () => {
     if (!state.phonemeExpressions.length) return;
+    pushUndo();
     state.phonemeExpressions.splice(state.selectedPhonemeIdx, 1);
     state.selectedPhonemeIdx = Math.max(0, state.selectedPhonemeIdx - 1);
     state.jsonEditorDirty = false;
@@ -1801,6 +1915,7 @@ function bindUi() {
   const bindMetaField = (el, onApply) => {
     if (!el) return;
     el.onchange = () => {
+      pushUndo();
       if (onApply()) renderAll();
     };
   };
@@ -1813,9 +1928,20 @@ function bindUi() {
 
   $("btn-add-scene").onclick = () => {
     const name = `expr_${Date.now().toString(36).slice(-6)}`;
+    pushUndo();
     state.emotionExpressions.push(defaultExpression(name, "新表情", []));
     state.selectedEmotionIdx = state.emotionExpressions.length - 1;
     state.jsonEditorDirty = false;
+    renderAll();
+  };
+
+  $("btn-del-scene").onclick = () => {
+    if (!state.emotionExpressions.length) return;
+    pushUndo();
+    state.emotionExpressions.splice(state.selectedEmotionIdx, 1);
+    state.selectedEmotionIdx = Math.max(0, state.selectedEmotionIdx - 1);
+    state.jsonEditorDirty = false;
+    checkExpressionConflicts(state.emotionExpressions, true);
     renderAll();
   };
 
@@ -1834,6 +1960,25 @@ function bindUi() {
     autosaveProjectIfNeeded(true);
   });
   $("btn-open-picker")?.addEventListener("click", () => projectPicker?.show());
+
+  $("btn-undo")?.addEventListener("click", () => undoEdit());
+  $("btn-redo")?.addEventListener("click", () => redoEdit());
+
+  if (els.props) {
+    let propsUndoPushed = false;
+    els.props.addEventListener("focusin", (ev) => {
+      if (state.readOnly) return;
+      if (ev.target.matches("input, select") && !propsUndoPushed) {
+        pushUndo();
+        propsUndoPushed = true;
+      }
+    });
+    els.props.addEventListener("focusout", (ev) => {
+      if (!els.props.contains(ev.relatedTarget)) {
+        propsUndoPushed = false;
+      }
+    });
+  }
 
   document.querySelectorAll(".json-mode-btn").forEach((btn) => {
     btn.onclick = () => switchJsonEditorMode(btn.dataset.mode);
@@ -1916,6 +2061,8 @@ async function boot() {
   els.docFileLabel = $("doc-file-label");
   els.docReadonlyBadge = $("doc-readonly-badge");
   els.btnSaveDesign = $("btn-save-design");
+  els.btnUndo = $("btn-undo");
+  els.btnRedo = $("btn-redo");
 
   els.canvasW.value = state.canvas.w;
   els.canvasH.value = state.canvas.h;

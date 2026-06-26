@@ -1,5 +1,7 @@
 /** Agent 系统 Prompt：音素 vs 情绪 + read/write 工具 */
 
+import { compactJsonStringify } from "./agent-tools.js";
+
 const SHAPE_DOC = `
 图元 shape 类型：rect, rect_outline, circle, circle_outline, round_rect, round_rect_outline,
 ellipse, ellipse_fill, line, pixel, hline, vline, triangle, triangle_fill,
@@ -57,25 +59,36 @@ const DIFF_DOC = `
 音素与情绪共用同一 JSON 文件；顶层还有 name（设计名称）与 description（设计说明）。
 `.trim();
 
+const PATCH_SCHEMA = `
+patch 增量格式（推荐，只含变更字段）：
+{
+  "name": "可选，设计名称",
+  "description": "可选，设计说明",
+  "phonemes": [ { "name": "a", "title": "...", "alias": [], "frames": [...] } ],
+  "emotions": [ { "name": "idle", "title": "...", "alias": [], "frames": [...] } ],
+  "removePhonemes": ["要删除的音素 name"],
+  "removeEmotions": ["要删除的情绪 name"]
+}
+· phonemes/emotions：按 name 匹配，存在则整项替换，不存在则追加；未提及的表情保持不动
+· 每个 patch 条目须含完整 frames，不是只改单个字段
+`.trim();
+
 const TOOL_DOC = `
 【虚拟文件与工具】
 - source.json：唯一源码文件（Agent 读写均映射到此文件）
-  {
-    "name": "项目名称",
-    "description": "设计说明",
-    "phonemes": [...],
-    "emotions": [...]
-  }
 
 工具（必须通过工具修改数据，禁止在回复中粘贴大段 JSON）：
-- read("source.json")：读取完整源码
-- write("source.json", content)：写入完整 JSON 并立即应用到编辑器
+- patch("source.json", patch)：**推荐**。增量合并，只提交变更的表情或元信息
+- write("source.json", content)：全量替换，仅在大改时使用
+- read("source.json")：可选；完整源码已在 system 末尾嵌入，一般无需 read
+
+${PATCH_SCHEMA}
 
 【工作流程】
-1. 先用 read("source.json") 读取当前源码
-2. 用中文向用户说明修改思路
-3. 用 write("source.json", ...) 提交修改后的完整 JSON（增量修改，保留未提及的表情）
-4. write 成功后简要总结改动
+1. 以下「当前 source.json」即最新源码，每次发送用户消息时自动刷新，无需 read
+2. 用中文向用户说明修改思路（可结合「当前编辑焦点」优先改哪一块）
+3. 优先用 patch 提交变更（通常只含 1 条 phonemes 或 emotions）；全量重写才用 write
+4. 成功后简要总结改动
 
 注意：name/alias 在同一列表内不可重复；rotated_rect 的 angle 仅 45° 倍数。
 `.trim();
@@ -99,6 +112,7 @@ export function buildAgentSystemPrompt(ctx) {
     emotionCount,
     docName,
     docDescription,
+    sourceDoc,
   } = ctx;
 
   const focus =
@@ -132,7 +146,10 @@ ${TOOL_DOC}
 
 ${focus}
 
-画布尺寸：${canvas.w}×${canvas.h}`;
+画布尺寸：${canvas.w}×${canvas.h}
+
+【当前 source.json（实时嵌入，无需 read）】
+${sourceDoc ? compactJsonStringify(sourceDoc) : "{}"}`;
 }
 
 /** 将 session 消息转为 API messages */

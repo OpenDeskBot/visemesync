@@ -58,6 +58,40 @@ function createCopyButton(getText) {
   return btn;
 }
 
+const STREAM_UI_MS = 50;
+
+/** 流式文本 UI 节流，避免每个 token 触发 DOM 重排 */
+function createStreamThrottler(pre, getPrefix, onScroll, intervalMs = STREAM_UI_MS) {
+  let pending = "";
+  let timer = null;
+
+  function flush() {
+    timer = null;
+    pre.textContent = pending;
+    onScroll();
+  }
+
+  return {
+    update(roundFull) {
+      const prefix = getPrefix();
+      const sep = prefix && roundFull ? "\n\n" : "";
+      pending = prefix + sep + roundFull;
+      if (!timer) timer = setTimeout(flush, intervalMs);
+    },
+    flushNow() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (pending !== pre.textContent) flush();
+    },
+    cancel() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    },
+  };
+}
+
 function createMsgHead(label, copyText) {
   const head = document.createElement("div");
   head.className = "agent-msg-head";
@@ -71,13 +105,18 @@ function createMsgHead(label, copyText) {
   return head;
 }
 
+function toolIcon(name) {
+  if (name === "write") return "✏️";
+  if (name === "patch") return "🩹";
+  return "📖";
+}
+
 function renderToolLine(container, m) {
   const row = document.createElement("div");
   const isErr = String(m.content).startsWith("ERROR:");
   row.className = "agent-tool-event" + (isErr ? " error" : "");
-  const icon = m.toolName === "write" ? "✏️" : "📖";
   const path = m.path ? `(${m.path})` : "";
-  row.textContent = `${icon} ${m.toolName || "tool"}${path} → ${String(m.content).split("\n")[0]}`;
+  row.textContent = `${toolIcon(m.toolName)} ${m.toolName || "tool"}${path} → ${String(m.content).split("\n")[0]}`;
   container.appendChild(row);
 }
 
@@ -89,9 +128,8 @@ function renderAgentGroup(group) {
   const toolLines = group
     .filter((m) => m.role === "tool")
     .map((m) => {
-      const icon = m.toolName === "write" ? "✏️" : "📖";
       const path = m.path ? `(${m.path})` : "";
-      return `${icon} ${m.toolName || "tool"}${path} → ${String(m.content).split("\n")[0]}`;
+      return `${toolIcon(m.toolName)} ${m.toolName || "tool"}${path} → ${String(m.content).split("\n")[0]}`;
     });
   const copyText = [...texts, ...toolLines].filter(Boolean).join("\n\n");
 
@@ -145,6 +183,7 @@ export function initAgentPanel(hooks) {
 
   function updateRunningUi() {
     els.btnSend.disabled = sending;
+    if (els.btnNewSession) els.btnNewSession.disabled = sending;
     if (els.toggle) {
       els.toggle.textContent = collapsed ? "Agent" : "收起";
     }
@@ -244,13 +283,9 @@ export function initAgentPanel(hooks) {
     const session = activeSession();
     if (!session) return;
 
-    if (liveStream?.div?.parentNode === els.messages) {
-      liveStream.div.remove();
-    }
-
     els.messages.innerHTML = "";
     if (!session.messages.length && !(sending && session.id === runningSessionId)) {
-      els.messages.innerHTML = `<p class="muted agent-empty">描述想要的表情变化。Agent 会通过 <code>read</code> 读取源代码、<code>write</code> 写回编辑器。切换 Tab 会改变编辑焦点。</p>`;
+      els.messages.innerHTML = `<p class="muted agent-empty">描述想要的表情变化。源码已随请求提供，优先用 <code>patch</code> 增量修改，大改用 <code>write</code>。</p>`;
     } else {
       let i = 0;
       while (i < session.messages.length) {
@@ -288,7 +323,7 @@ export function initAgentPanel(hooks) {
     const label =
       ctx.tab === "phoneme" ? "音素表情" : ctx.tab === "scene" ? "情绪表情" : "源码文件";
     const expr = ctx.currentExpression;
-    els.focusHint.textContent = `编辑焦点：${label} · ${expr?.title || expr?.name || "—"} · 工具：read / write · ${ctx.phonemeCount} 音素 + ${ctx.emotionCount} 情绪`;
+    els.focusHint.textContent = `编辑焦点：${label} · ${expr?.title || expr?.name || "—"} · 工具：patch / write · ${ctx.phonemeCount} 音素 + ${ctx.emotionCount} 情绪`;
   }
 
   function createStreamingBubble() {
@@ -305,6 +340,14 @@ export function initAgentPanel(hooks) {
     badge.className = "agent-msg-running";
     badge.textContent = "运行中";
 
+    const body = document.createElement("div");
+    body.className = "agent-msg-body";
+    const pre = document.createElement("pre");
+    pre.textContent = "";
+    body.appendChild(pre);
+    const toolsBox = document.createElement("div");
+    toolsBox.className = "agent-tool-events agent-tool-events-live";
+
     const abortBtn = document.createElement("button");
     abortBtn.type = "button";
     abortBtn.className = "btn sm agent-msg-abort";
@@ -317,13 +360,6 @@ export function initAgentPanel(hooks) {
     head.appendChild(createCopyButton(() => pre.textContent));
     head.appendChild(abortBtn);
 
-    const body = document.createElement("div");
-    body.className = "agent-msg-body";
-    const pre = document.createElement("pre");
-    pre.textContent = "";
-    body.appendChild(pre);
-    const toolsBox = document.createElement("div");
-    toolsBox.className = "agent-tool-events agent-tool-events-live";
     div.appendChild(head);
     div.appendChild(body);
     div.appendChild(toolsBox);
@@ -367,6 +403,11 @@ export function initAgentPanel(hooks) {
     let streamText = "";
     let roundText = "";
     let aborted = false;
+    const streamUi = createStreamThrottler(
+      stream.pre,
+      () => streamText,
+      () => scrollMessagesIfActive(runSessionId),
+    );
 
     try {
       const ctx = hooks.getAgentContext();
@@ -385,11 +426,10 @@ export function initAgentPanel(hooks) {
         {
           onContent: (_chunk, roundFull) => {
             roundText = roundFull;
-            const sep = streamText && roundFull ? "\n\n" : "";
-            stream.pre.textContent = streamText + sep + roundFull;
-            scrollMessagesIfActive(runSessionId);
+            streamUi.update(roundFull);
           },
           onAssistantDone: (msg) => {
+            streamUi.flushNow();
             if (msg.content) {
               streamText += (streamText ? "\n\n" : "") + msg.content;
               roundText = "";
@@ -404,7 +444,7 @@ export function initAgentPanel(hooks) {
             } catch {
               /* partial */
             }
-            const icon = name === "write" ? "✏️" : "📖";
+            const icon = toolIcon(name);
             appendToolLive(stream.toolsBox, `${icon} ${name}(${args.path || "…"}) …`);
             scrollMessagesIfActive(runSessionId);
           },
@@ -417,15 +457,14 @@ export function initAgentPanel(hooks) {
               /* ignore */
             }
             const isErr = String(result).startsWith("ERROR:");
-            const icon = name === "write" ? "✏️" : "📖";
             appendToolLive(
               stream.toolsBox,
-              `${icon} ${name}(${args.path}) → ${String(result).split("\n")[0]}`,
+              `${toolIcon(name)} ${name}(${args.path}) → ${String(result).split("\n")[0]}`,
               isErr,
             );
             scrollMessagesIfActive(runSessionId);
-            if (name === "write" && !isErr) {
-              showToast("Agent 已通过 write 更新编辑器", "success");
+            if ((name === "write" || name === "patch") && !isErr) {
+              showToast(`Agent 已通过 ${name} 更新编辑器`, "success");
             }
           },
         },
@@ -469,6 +508,8 @@ export function initAgentPanel(hooks) {
         showToast(String(e.message || e), "error");
       }
     } finally {
+      streamUi.flushNow();
+      streamUi.cancel();
       abortController = null;
       sending = false;
       runningSessionId = null;
@@ -502,10 +543,11 @@ export function initAgentPanel(hooks) {
   els.btnSaveConfig?.addEventListener("click", saveConfigFromForm);
   els.btnNewSession?.addEventListener("click", () => {
     if (sending) {
-      showToast("请等待当前对话完成或中断后再新建", "error");
+      showToast("Agent 运行中，请等待完成或中断后再新建对话", "error");
       return;
     }
-    const s = { id: uid(), title: `对话 ${sessions.length + 1}`, messages: [] };
+    const n = sessions.length + 1;
+    const s = { id: uid(), title: `对话 ${n}`, messages: [] };
     sessions.push(s);
     activeId = s.id;
     persistAgentState();
@@ -540,6 +582,13 @@ export function initAgentPanel(hooks) {
       };
     },
     loadAgentState({ agentChatList, currentAgentChat }) {
+      if (sending && abortController) {
+        abortController.abort();
+      }
+      sending = false;
+      runningSessionId = null;
+      liveStream = null;
+      abortController = null;
       if (Array.isArray(agentChatList) && agentChatList.length) {
         sessions = structuredClone(agentChatList);
         activeId =
@@ -551,6 +600,7 @@ export function initAgentPanel(hooks) {
         sessions = def.agentChatList;
         activeId = def.currentAgentChat;
       }
+      updateRunningUi();
       renderSessions();
       renderMessages();
     },
