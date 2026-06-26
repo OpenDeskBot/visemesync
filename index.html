@@ -13,14 +13,18 @@
       <label class="inline">宽<input id="canvas-w" type="number" min="64" max="512" value="284" /></label>
       <label class="inline">高<input id="canvas-h" type="number" min="64" max="512" value="240" /></label>
       <span id="canvas-meta" class="mono muted">284 × 240</span>
-      <button type="button" class="btn" id="btn-save-local">暂存</button>
-      <button type="button" class="btn secondary" id="btn-load-local">恢复</button>
+      <button type="button" class="btn" id="btn-save-design">保存</button>
+      <button type="button" class="btn secondary" id="btn-save-as">另存为</button>
+      <button type="button" class="btn secondary" id="btn-export-project">导出项目</button>
+      <button type="button" class="btn secondary" id="btn-export-design">导出设计文件</button>
     </div>
   </header>
 
   <div class="doc-bar">
     <label class="doc-field">名称<input id="doc-name" type="text" placeholder="设计名称" /></label>
     <label class="doc-field doc-field-grow">说明<input id="doc-description" type="text" placeholder="表情设计说明" /></label>
+    <span id="doc-file-label" class="doc-file-label mono muted"></span>
+    <span id="doc-readonly-badge" class="doc-readonly-badge hidden">只读</span>
     <button type="button" class="btn sm secondary" id="btn-open-picker">打开 / 新建</button>
   </div>
 
@@ -47,11 +51,6 @@
           <label>alias<textarea id="p-alias" rows="2" placeholder="an, ang（逗号分隔）"></textarea></label>
           <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情</p>
         </div>
-        <div class="io-row">
-          <button type="button" class="btn primary" id="btn-export-phoneme">导出 JSON</button>
-          <button type="button" class="btn secondary" id="btn-import-phoneme">导入</button>
-          <input id="import-phoneme" type="file" accept="application/json,.json" hidden />
-        </div>
       </section>
 
       <section class="panel-tab hidden" data-panel="scene">
@@ -66,22 +65,13 @@
           <label>alias<textarea id="e-alias" rows="2" placeholder="standby（逗号分隔）"></textarea></label>
           <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情</p>
         </div>
-        <div class="preset-row">
-          <select id="preset-select"></select>
-          <button type="button" class="btn sm" id="btn-add-preset">添加预设</button>
-        </div>
-        <div class="io-row">
-          <button type="button" class="btn primary" id="btn-export-scenes">导出 JSON</button>
-          <button type="button" class="btn secondary" id="btn-import-scenes">导入</button>
-          <input id="import-scenes" type="file" accept="application/json,.json" hidden />
-        </div>
       </section>
 
       <section class="panel-tab hidden" data-panel="source">
         <div class="panel-head">
           <h2>源码文件</h2>
         </div>
-        <p class="hint">完整 JSON 含 <code>name</code>、<code>description</code>、<code>phonemes</code>、<code>emotions</code> · 切换 Tab 或点「保存」时自动同步 · <kbd>Ctrl</kbd>+F 查找</p>
+        <p class="hint">完整 JSON 含 <code>name</code>、<code>description</code>、<code>phonemes</code>、<code>emotions</code> · Agent 读写虚拟文件 <code>source.json</code> · <kbd>Ctrl</kbd>+F 查找</p>
         <div class="io-row source-actions">
           <button type="button" class="btn sm" id="btn-copy-source">复制</button>
           <button type="button" class="btn sm" id="btn-format-source">格式化</button>
@@ -99,17 +89,17 @@
             <button type="button" class="btn sm json-mode-btn active" data-mode="json">JSON 视图</button>
             <button type="button" class="btn sm json-mode-btn" data-mode="text">文本视图</button>
             <button type="button" class="btn sm" id="btn-format-json">格式化</button>
-            <button type="button" class="btn sm primary" id="btn-save-json">保存</button>
           </div>
         </div>
         <div id="json-tree" class="json-tree"></div>
         <textarea id="json-editor" class="json-editor hidden" spellcheck="false" placeholder="文本视图：可编辑 JSON…"></textarea>
-        <p class="hint">JSON 视图：树状只读浏览 · 文本视图：可编辑，格式化按 2 空格缩进 · 修改后点保存</p>
+        <p class="hint">JSON 视图：树状只读浏览 · 文本视图：可编辑，可点格式化</p>
       </section>
     </aside>
 
     <section class="stage">
       <div id="stage-edit">
+      <div class="stage-canvas-block">
       <div class="canvas-wrap" id="canvas-wrap">
         <canvas id="face-canvas" width="284" height="240"></canvas>
         <div id="marquee-box" class="marquee-box hidden"></div>
@@ -126,6 +116,7 @@
           </select>
         </label>
         <span id="layer-lock-hint" class="layer-lock-hint"></span>
+      </div>
       </div>
       <section id="frame-timeline" class="frame-timeline hidden">
         <div class="frame-timeline-head">
@@ -232,20 +223,47 @@
   <footer id="status-bar" class="status">就绪</footer>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <div id="project-picker" class="project-picker">
+  <div id="project-picker" class="project-picker hidden">
     <div class="project-picker-dialog">
       <header class="project-picker-head">
-        <h2>打开表情设计</h2>
-        <p class="muted">从 <code>data/</code> 目录选择预设，或导入 / 新建</p>
+        <h2>打开项目</h2>
+        <p class="muted">内置模板来自 <code>data/</code>，选择后需命名并创建本地项目；本地项目保存在浏览器 localStorage</p>
       </header>
-      <div id="project-list" class="project-list"></div>
-      <div id="project-draft-row" class="project-actions hidden">
-        <button type="button" class="btn secondary" id="btn-load-draft">恢复本地草稿</button>
+      <div class="project-picker-body">
+        <section class="project-section">
+          <h3 class="project-section-title">内置模板 <span class="muted">（选择后命名创建项目）</span></h3>
+          <div id="catalog-list" class="project-list"></div>
+        </section>
+        <section class="project-section">
+          <h3 class="project-section-title">本地项目</h3>
+          <div id="local-design-list" class="project-list"></div>
+        </section>
       </div>
       <div class="project-actions">
-        <button type="button" class="btn" id="btn-import-project">导入 JSON 文件</button>
-        <button type="button" class="btn primary" id="btn-new-project">新建空白设计</button>
+        <button type="button" class="btn" id="btn-import-project">导入设计 JSON</button>
+        <button type="button" class="btn" id="btn-import-project-zip">导入项目 ZIP</button>
+        <button type="button" class="btn danger" id="btn-cleanup-drafts">清理 draft 草稿</button>
+        <button type="button" class="btn primary" id="btn-new-project">新建项目</button>
         <input id="import-project-file" type="file" accept="application/json,.json" hidden />
+        <input id="import-project-zip" type="file" accept="application/zip,.zip" hidden />
+      </div>
+    </div>
+  </div>
+
+  <div id="save-as-dialog" class="project-picker hidden">
+    <div class="project-picker-dialog save-as-dialog">
+      <header class="project-picker-head">
+        <h2 id="save-as-title">另存为项目</h2>
+        <p id="save-as-hint" class="muted">输入项目名称（不含 .json），保存到浏览器 localStorage</p>
+      </header>
+      <div class="save-as-form">
+        <label class="save-as-field">项目名称
+          <input id="save-as-filename" type="text" placeholder="my-project" spellcheck="false" />
+        </label>
+      </div>
+      <div class="project-actions">
+        <button type="button" class="btn secondary" id="btn-save-as-cancel">取消</button>
+        <button type="button" class="btn primary" id="btn-save-as-confirm">保存</button>
       </div>
     </div>
   </div>

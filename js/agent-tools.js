@@ -1,20 +1,20 @@
-/** Agent 虚拟文件系统：read / write 工具 */
+/** Agent 虚拟文件系统：read / write 工具（统一映射 source.json） */
 
-export const VIRTUAL_PATHS = ["design.json"];
+export const VIRTUAL_PATHS = ["source.json"];
 
 export const AGENT_TOOLS = [
   {
     type: "function",
     function: {
       name: "read",
-      description: "读取虚拟设计文件 design.json（含 name、description、phonemes、emotions）。",
+      description: "读取虚拟源码 source.json（含 name、description、phonemes、emotions）。",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
             enum: VIRTUAL_PATHS,
-            description: "虚拟文件路径，固定为 design.json",
+            description: "虚拟文件路径，固定为 source.json",
           },
         },
         required: ["path"],
@@ -26,14 +26,14 @@ export const AGENT_TOOLS = [
     function: {
       name: "write",
       description:
-        "写入 design.json 并立即应用到 VisemeSync 编辑器。content 为完整 JSON 字符串，含 name、description、phonemes、emotions。",
+        "写入 source.json 并立即应用到 VisemeSync 编辑器。content 为完整 JSON 字符串，含 name、description、phonemes、emotions。",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
             enum: VIRTUAL_PATHS,
-            description: "虚拟文件路径，固定为 design.json",
+            description: "虚拟文件路径，固定为 source.json",
           },
           content: {
             type: "string",
@@ -49,16 +49,16 @@ export const AGENT_TOOLS = [
 export function createToolExecutor(hooks) {
   const vfs = {
     read(path) {
-      if (path !== "design.json") {
-        throw new Error(`未知路径: ${path}，仅支持 design.json`);
+      if (path !== "source.json") {
+        throw new Error(`未知路径: ${path}，仅支持 source.json`);
       }
       const doc = hooks.getAgentContext().sourceDoc;
       return JSON.stringify(doc, null, 2);
     },
 
     write(path, content) {
-      if (path !== "design.json") {
-        throw new Error(`未知路径: ${path}，仅支持 design.json`);
+      if (path !== "source.json") {
+        throw new Error(`未知路径: ${path}，仅支持 source.json`);
       }
       let parsed;
       try {
@@ -67,7 +67,7 @@ export function createToolExecutor(hooks) {
         throw new Error(`content 不是合法 JSON: ${e.message || e}`);
       }
       hooks.applySourceDoc(parsed);
-      return `已写入并应用 design.json（${parsed.phonemes?.length ?? "?"} 音素 + ${parsed.emotions?.length ?? "?"} 情绪）`;
+      return `已写入并应用 source.json（${parsed.phonemes?.length ?? "?"} 音素 + ${parsed.emotions?.length ?? "?"} 情绪）`;
     },
   };
 

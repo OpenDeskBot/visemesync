@@ -10,8 +10,9 @@
   --nose: #fc6;
   --eye: #6cf;
   --sidebar-left-w: 280px;
-  --sidebar-tools-w: 240px;
+  --sidebar-tools-w: 312px;
   --sidebar-agent-w: 420px;
+  --canvas-display-scale: 2;
   --source-editor-font-size: 12px;
   --source-editor-line-height: 1.45;
   --source-editor-padding-y: 12px;
@@ -167,10 +168,11 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   margin-bottom: 8px;
 }
 .right-tools .shape-section .shape-palette {
-  max-height: min(200px, 22vh);
+  max-height: min(240px, 26vh);
   overflow-y: auto;
+  overflow-x: hidden;
   align-content: start;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .panel-tab.hidden { display: none; }
 .hidden { display: none !important; }
@@ -183,6 +185,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
+  overflow-x: hidden;
 }
 .shape-tile {
   display: flex;
@@ -288,13 +291,23 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 #stage-edit {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
+  gap: 0;
+}
+.stage-canvas-block {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
+  overflow: auto;
+  padding-bottom: 8px;
 }
 #stage-edit.hidden { display: none; }
 .stage-source {
@@ -378,12 +391,14 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .source-actions { margin-top: 8px; }
 .canvas-wrap {
   position: relative;
+  flex-shrink: 0;
   border: 2px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,.35);
   background: #111;
   transition: border-color .2s, box-shadow .2s;
+  line-height: 0;
 }
 .marquee-box {
   position: absolute;
@@ -397,10 +412,23 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.25), 0 8px 32px rgba(0,0,0,.35);
 }
-#face-canvas { display: block; max-width: 100%; width: min(568px, 100%); height: auto; image-rendering: pixelated; }
-.canvas-hint { font-size: 11px; color: var(--muted); margin: 0; }
-
-.list { display: flex; flex-direction: column; gap: 4px; max-height: min(160px, 22vh); overflow: auto; margin-bottom: 8px; }
+#face-canvas {
+  display: block;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+.canvas-hint { font-size: 11px; color: var(--muted); margin: 0; text-align: center; }
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: var(--canvas-display-w, 568px);
+  justify-content: center;
+}
+.toolbar select { min-width: 140px; }
 .list-item {
   text-align: left;
   padding: 8px 10px;
@@ -450,8 +478,6 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   color: #ffb4b4;
 }
 
-.toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.toolbar select { min-width: 140px; }
 .layer-lock-hint {
   font-size: 12px;
   color: var(--muted);
@@ -460,12 +486,15 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 }
 
 .frame-timeline {
-  width: min(568px, 100%);
-  margin-top: 0;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: var(--canvas-display-w, 568px);
+  margin: 0 auto;
   padding: 10px 8px 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #12161f;
+  align-self: center;
 }
 .frame-timeline.hidden { display: none; }
 .frame-timeline-head {
@@ -1142,7 +1171,7 @@ kbd {
 @media (max-width: 1200px) {
   :root {
     --sidebar-left-w: 260px;
-    --sidebar-tools-w: 220px;
+    --sidebar-tools-w: 286px;
     --sidebar-agent-w: 360px;
   }
 }
@@ -1176,8 +1205,8 @@ kbd {
 .project-picker.hidden { display: none; }
 body.project-picker-open { overflow: hidden; }
 .project-picker-dialog {
-  width: min(560px, 100%);
-  max-height: min(85vh, 640px);
+  width: min(620px, 100%);
+  max-height: min(85vh, 720px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -1198,14 +1227,108 @@ body.project-picker-open { overflow: hidden; }
   margin: 0;
   font-size: 13px;
 }
-.project-list {
+.project-picker-body {
   flex: 1;
-  min-height: 120px;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+.project-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.project-section .project-list {
+  max-height: min(220px, 32vh);
+}
+.project-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+.project-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.project-card-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.project-card-readonly {
+  border-color: #3a4a6a;
+}
+.doc-file-label {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.doc-readonly-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #5a4030;
+  background: rgba(255, 180, 80, 0.12);
+  color: #ffc896;
+  white-space: nowrap;
+}
+.save-as-dialog {
+  width: min(420px, 100%);
+}
+.save-as-form {
+  padding: 12px 16px;
+}
+.save-as-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.save-as-field input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+body.save-as-open { overflow: hidden; }
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.project-card-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.project-card-row .project-card {
+  flex: 1;
+  min-width: 0;
+}
+.project-card-del {
+  flex-shrink: 0;
+  width: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #12161f;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.project-card-del:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 .project-card {
   display: flex;

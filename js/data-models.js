@@ -195,7 +195,7 @@ export function formatExpressionJson(expr, indent = 2) {
   return JSON.stringify(expr, null, indent);
 }
 
-export const SOURCE_FILENAME = "design.json";
+export const SOURCE_FILENAME = "source.json";
 export const PROJECTS_MANIFEST_URL = "data/projects.json";
 
 /** 兼容旧版 phoneme_expressions / emotion_expressions 字段 */

@@ -2,40 +2,10 @@ import { runAgentWithTools, loadAgentConfig, saveAgentConfig, DEFAULT_AGENT_CONF
 import { buildAgentSystemPrompt, sessionToApiMessages, apiMessagesToSession } from "./agent-prompt.js";
 import { AGENT_TOOLS, createToolExecutor } from "./agent-tools.js";
 import { showToast } from "./toast.js";
-
-const SESSIONS_KEY = "visemesync.agent.sessions";
-const ACTIVE_SESSION_KEY = "visemesync.agent.activeSession";
+import { defaultAgentChats, chatUid } from "./project-store.js";
 
 function uid() {
-  return `chat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-}
-
-function loadSessions() {
-  try {
-    const raw = localStorage.getItem(SESSIONS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* ignore */
-  }
-  return [{ id: uid(), title: "对话 1", messages: [] }];
-}
-
-function loadActiveSessionId(sessions) {
-  try {
-    const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
-    if (saved && sessions.some((s) => s.id === saved)) return saved;
-  } catch {
-    /* ignore */
-  }
-  return sessions[0]?.id;
-}
-
-function saveSessions(sessions) {
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-}
-
-function saveActiveSessionId(id) {
-  if (id) localStorage.setItem(ACTIVE_SESSION_KEY, id);
+  return chatUid();
 }
 
 function escapeHtml(s) {
@@ -164,9 +134,8 @@ export function initAgentPanel(hooks) {
   };
 
   let config = loadAgentConfig();
-  let sessions = loadSessions();
-  let activeId = loadActiveSessionId(sessions);
-  saveActiveSessionId(activeId);
+  let sessions = defaultAgentChats().agentChatList;
+  let activeId = defaultAgentChats().currentAgentChat;
   let sending = false;
   let runningSessionId = null;
   let liveStream = null;
@@ -185,6 +154,13 @@ export function initAgentPanel(hooks) {
     if (!sending || !abortController) return;
     abortController.abort();
     showToast("正在中断…", "success");
+  }
+
+  function persistAgentState() {
+    hooks.onAgentStateChange?.({
+      agentChatList: sessions,
+      currentAgentChat: activeId,
+    });
   }
 
   function activeSession() {
@@ -231,7 +207,7 @@ export function initAgentPanel(hooks) {
       btn.onclick = () => {
         if (s.id === activeId) return;
         activeId = s.id;
-        saveActiveSessionId(activeId);
+        persistAgentState();
         renderSessions();
         renderMessages();
       };
@@ -252,8 +228,7 @@ export function initAgentPanel(hooks) {
         }
         sessions = sessions.filter((x) => x.id !== s.id);
         if (activeId === s.id) activeId = sessions[0].id;
-        saveActiveSessionId(activeId);
-        saveSessions(sessions);
+        persistAgentState();
         renderSessions();
         renderMessages();
       };
@@ -379,7 +354,7 @@ export function initAgentPanel(hooks) {
     els.input.value = "";
     renderSessions();
     renderMessages();
-    saveSessions(sessions);
+    persistAgentState();
 
     abortController = new AbortController();
     sending = true;
@@ -474,7 +449,7 @@ export function initAgentPanel(hooks) {
         }
         showToast("Agent 运行已中断", "success");
       }
-      saveSessions(sessions);
+      persistAgentState();
     } catch (e) {
       if (e.name === "AbortError") {
         aborted = true;
@@ -483,14 +458,14 @@ export function initAgentPanel(hooks) {
           role: "assistant",
           content: partial ? `${partial}\n\n（已中断）` : "（已中断）",
         });
-        saveSessions(sessions);
+        persistAgentState();
         showToast("Agent 运行已中断", "success");
       } else {
         runSession.messages.push({
           role: "assistant",
           content: `请求失败：${e.message || e}`,
         });
-        saveSessions(sessions);
+        persistAgentState();
         showToast(String(e.message || e), "error");
       }
     } finally {
@@ -533,8 +508,7 @@ export function initAgentPanel(hooks) {
     const s = { id: uid(), title: `对话 ${sessions.length + 1}`, messages: [] };
     sessions.push(s);
     activeId = s.id;
-    saveActiveSessionId(activeId);
-    saveSessions(sessions);
+    persistAgentState();
     renderSessions();
     renderMessages();
   });
@@ -558,6 +532,27 @@ export function initAgentPanel(hooks) {
   return {
     refresh() {
       updateFocusHint();
+    },
+    getAgentState() {
+      return {
+        agentChatList: sessions,
+        currentAgentChat: activeId,
+      };
+    },
+    loadAgentState({ agentChatList, currentAgentChat }) {
+      if (Array.isArray(agentChatList) && agentChatList.length) {
+        sessions = structuredClone(agentChatList);
+        activeId =
+          currentAgentChat && sessions.some((s) => s.id === currentAgentChat)
+            ? currentAgentChat
+            : sessions[0].id;
+      } else {
+        const def = defaultAgentChats();
+        sessions = def.agentChatList;
+        activeId = def.currentAgentChat;
+      }
+      renderSessions();
+      renderMessages();
     },
   };
 }

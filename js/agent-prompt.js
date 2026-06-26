@@ -59,22 +59,22 @@ const DIFF_DOC = `
 
 const TOOL_DOC = `
 【虚拟文件与工具】
-- design.json：唯一源码文件
+- source.json：唯一源码文件（Agent 读写均映射到此文件）
   {
-    "name": "设计名称",
+    "name": "项目名称",
     "description": "设计说明",
     "phonemes": [...],
     "emotions": [...]
   }
 
 工具（必须通过工具修改数据，禁止在回复中粘贴大段 JSON）：
-- read("design.json")：读取完整源码
-- write("design.json", content)：写入完整 JSON 并立即应用到编辑器
+- read("source.json")：读取完整源码
+- write("source.json", content)：写入完整 JSON 并立即应用到编辑器
 
 【工作流程】
-1. 先用 read("design.json") 读取当前源码
+1. 先用 read("source.json") 读取当前源码
 2. 用中文向用户说明修改思路
-3. 用 write("design.json", ...) 提交修改后的完整 JSON（增量修改，保留未提及的表情）
+3. 用 write("source.json", ...) 提交修改后的完整 JSON（增量修改，保留未提及的表情）
 4. write 成功后简要总结改动
 
 注意：name/alias 在同一列表内不可重复；rotated_rect 的 angle 仅 45° 倍数。

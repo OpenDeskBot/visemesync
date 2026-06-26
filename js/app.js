@@ -1,15 +1,10 @@
 import {
   DEFAULT_CANVAS,
   DEFAULT_FACE,
-  EMOTION_PRESETS,
   defaultPhonemeExpression,
   defaultPhonemeDoc,
-  defaultScene,
   defaultFrame,
-  defaultScenesDoc,
   defaultExpression,
-  downloadJson,
-  loadJsonUrl,
   readJsonFile,
   validatePhonemeDoc,
   validateScenesDoc,
@@ -18,10 +13,8 @@ import {
   normalizeExpression,
   formatExpressionJson,
   expressionMatchKeys,
-  SOURCE_FILENAME,
   validateSourceDoc,
   defaultSourceDoc,
-  slugifyFilename,
 } from "./data-models.js";
 import {
   LAYER_LABELS,
@@ -52,6 +45,17 @@ import { buildSourceDoc } from "./agent-prompt.js";
 import { applySourceDoc } from "./data-models.js";
 import { initAgentPanel } from "./agent-panel.js";
 import { createProjectPicker } from "./project-picker.js";
+import {
+  saveProject,
+  copyProject,
+  copyProjectFromSnapshot,
+  normalizeProjectName,
+  projectDesignFilename,
+  defaultAgentChats,
+  listProjects,
+} from "./project-store.js";
+import { createProjectNameDialog } from "./project-name-dialog.js";
+import { exportProjectZip, exportDesignJson } from "./project-export.js";
 
 const SCENE_LAYERS = ["mouth", "eye_l", "eye_r", "nose", "extra"];
 const DRAG_MIME = "application/x-viseme-shape";
@@ -59,15 +63,17 @@ const MIN_FRAME_MS = 16;
 const MS_PER_PX = 8;
 const GAP_MIN_PX = 32;
 const PLAY_TICK_MS = 13;
-const LS_SOURCE_KEY = "visemesync.source";
-const LS_CANVAS_KEY = "visemesync.canvas";
+const CANVAS_DISPLAY_SCALE = 2;
 
 const state = {
   tab: "phoneme",
   canvas: { ...DEFAULT_CANVAS },
   docName: "",
   docDescription: "",
-  exportFilename: SOURCE_FILENAME,
+  projectId: null,
+  projectName: null,
+  catalogFile: null,
+  readOnly: false,
   phonemeExpressions: [],
   emotionExpressions: [],
   selectedPhonemeIdx: 0,
@@ -91,6 +97,14 @@ const els = {};
 let sourceEditorUi = null;
 let agentPanel = null;
 let projectPicker = null;
+let projectNameDialog = null;
+let autosaveTimer = null;
+
+function scheduleAutosave() {
+  if (state.readOnly || !state.projectId || !state.projectName) return;
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => autosaveProjectIfNeeded(true), 400);
+}
 
 function getAgentContext() {
   const tab = state.tab;
@@ -141,15 +155,21 @@ function applySourceDocToState(doc, meta = {}) {
   state.docDescription = validated.description;
   state.phonemeExpressions = validated.phonemes;
   state.emotionExpressions = validated.emotions;
-  if (meta.file) state.exportFilename = meta.file;
-  else if (meta.from === "new") state.exportFilename = slugifyFilename(validated.name);
+
+  if (meta.canvas) {
+    state.canvas = { ...DEFAULT_CANVAS, ...meta.canvas };
+    if (els.canvasW) els.canvasW.value = state.canvas.w;
+    if (els.canvasH) els.canvasH.value = state.canvas.h;
+  }
+
   state.jsonEditorDirty = false;
   state.sourceEditorDirty = false;
   clampSelectedIndices();
   checkExpressionConflicts(state.phonemeExpressions, true);
   checkExpressionConflicts(state.emotionExpressions, true);
   syncDocMetaForm();
-  saveSourceToLocalStorage(true);
+  syncDesignUi();
+  if (!meta.isOpen) autosaveProjectIfNeeded(true);
 }
 
 function applyAgentSource(doc, meta) {
@@ -163,9 +183,339 @@ function syncDocMetaForm() {
 }
 
 function applyDocMetaFromForm() {
-  if (els.docName) state.docName = els.docName.value.trim() || "未命名设计";
+  if (els.docName) state.docName = els.docName.value.trim() || state.projectName || "未命名设计";
   if (els.docDescription) state.docDescription = els.docDescription.value.trim();
-  state.exportFilename = slugifyFilename(state.docName, state.exportFilename);
+}
+
+function collectProjectSnapshot() {
+  const design = validateDocForSave();
+  if (!design) return null;
+  design.name = state.projectName || state.docName || design.name;
+  design.description = state.docDescription;
+  const agent = agentPanel?.getAgentState?.() || defaultAgentChats();
+  return {
+    id: state.projectId,
+    projectName: state.projectName || state.docName || design.name,
+    description: state.docDescription,
+    design,
+    canvas: { ...state.canvas },
+    agentChatList: agent.agentChatList,
+    currentAgentChat: agent.currentAgentChat,
+  };
+}
+
+function openProjectRecord(project, { readOnly = false } = {}) {
+  state.projectId = readOnly ? null : project.id;
+  state.projectName = project.projectName;
+  state.readOnly = readOnly;
+  state.catalogFile = null;
+  state.docName = project.design?.name ?? project.projectName;
+  state.docDescription = project.description ?? project.design?.description ?? "";
+
+  applySourceDocToState(project.design, {
+    isOpen: true,
+    canvas: project.canvas,
+  });
+
+  if (state.projectName) {
+    state.docName = state.projectName;
+    if (els.docName) els.docName.value = state.projectName;
+  }
+
+  agentPanel?.loadAgentState({
+    agentChatList: project.agentChatList,
+    currentAgentChat: project.currentAgentChat,
+  });
+
+  syncDesignUi();
+  renderAll();
+  setStatus(readOnly ? `已打开内置模板（只读）：${project.projectName}` : `已打开项目：${project.projectName}`);
+  showToast(readOnly ? `已打开内置模板（只读）` : `已打开项目：${project.projectName}`, "success");
+}
+
+function createProjectFromCatalog(projectName, doc, catalogItem) {
+  const name = assertProjectNameAvailable(projectName);
+  const design = validateSourceDoc(structuredClone(doc));
+  design.name = name;
+  const agent = defaultAgentChats();
+  const saved = saveProject({
+    projectName: name,
+    description: design.description || catalogItem?.description || "",
+    design,
+    canvas: { ...DEFAULT_CANVAS },
+    agentChatList: agent.agentChatList,
+    currentAgentChat: agent.currentAgentChat,
+  });
+  pendingCatalogDoc = null;
+  pendingCatalogItem = null;
+  openProjectRecord(saved);
+}
+
+function beginCatalogProject(doc, catalogItem) {
+  pendingCatalogDoc = doc;
+  pendingCatalogItem = catalogItem;
+  const base = catalogItem.file.replace(/\.json$/i, "") || catalogItem.name || "project";
+  openProjectNameDialog("fromCatalog", {
+    title: "从内置模板创建项目",
+    hint: `基于「${catalogItem.name}」创建本地项目，请输入项目名称`,
+    defaultName: base,
+    confirmText: "创建",
+  });
+}
+
+function handleDeleteProject(id) {
+  if (state.projectId === id) {
+    state.projectId = null;
+    state.projectName = null;
+    state.readOnly = false;
+    state.catalogFile = null;
+    setStatus("当前项目已删除");
+    showToast("当前项目已删除", "success");
+  } else {
+    showToast("已删除项目", "success");
+  }
+}
+
+function syncDesignUi() {
+  if (els.docFileLabel) {
+    if (state.readOnly && state.catalogFile) {
+      els.docFileLabel.textContent = `内置模板 · ${state.catalogFile}（只读）`;
+    } else if (state.projectId && state.projectName) {
+      els.docFileLabel.textContent = `项目 · ${state.projectName} · ${projectDesignFilename(state.projectName)}`;
+    } else if (state.projectName && !state.projectId) {
+      els.docFileLabel.textContent = `${state.projectName}（未保存）`;
+    } else {
+      els.docFileLabel.textContent = "";
+    }
+  }
+  if (els.docReadonlyBadge) {
+    els.docReadonlyBadge.classList.toggle("hidden", !state.readOnly);
+  }
+  if (els.btnSaveDesign) {
+    els.btnSaveDesign.disabled = state.readOnly;
+    els.btnSaveDesign.title = state.readOnly
+      ? "内置模板不可改写，请使用「另存为」"
+      : "保存整个项目到 localStorage";
+  }
+}
+
+function validateDocForSave() {
+  if ((state.tab === "phoneme" || state.tab === "scene") && !applyExpressionMetaFromForm()) {
+    return null;
+  }
+  applyDocMetaFromForm();
+  const doc = validateSourceDoc(getSourceDocObject());
+  const phDups = findExpressionKeyConflicts(doc.phonemes);
+  const emDups = findExpressionKeyConflicts(doc.emotions);
+  if (phDups.length) {
+    showToast(formatExpressionConflictError(phDups, doc.phonemes), "error");
+    return null;
+  }
+  if (emDups.length) {
+    showToast(formatExpressionConflictError(emDups, doc.emotions), "error");
+    return null;
+  }
+  return doc;
+}
+
+function autosaveProjectIfNeeded(silent = true) {
+  if (state.readOnly || !state.projectId || !state.projectName) return false;
+  const snap = collectProjectSnapshot();
+  if (!snap) return false;
+  const saved = saveProject(snap);
+  state.projectId = saved.id;
+  if (!silent) {
+    setStatus(`已保存项目 ${saved.projectName}`);
+    showToast(`已保存项目 ${saved.projectName}`, "success");
+  }
+  syncDesignUi();
+  return true;
+}
+
+function saveCurrentProject() {
+  if (state.readOnly) {
+    showToast("内置模板不可改写，请使用「另存为」", "error");
+    return false;
+  }
+  if (!state.projectId || !state.projectName) {
+    openProjectNameDialog("save");
+    return false;
+  }
+  const snap = collectProjectSnapshot();
+  if (!snap) return false;
+  const saved = saveProject(snap);
+  state.projectId = saved.id;
+  state.readOnly = false;
+  setStatus(`已保存项目 ${saved.projectName}`);
+  showToast(`已保存项目 ${saved.projectName}`, "success");
+  syncDesignUi();
+  return true;
+}
+
+function saveAsProject(newProjectName) {
+  const snap = collectProjectSnapshot();
+  if (!snap) return false;
+  const name = normalizeProjectName(newProjectName);
+  let saved;
+  if (state.projectId && !state.readOnly) {
+    saved = copyProject(state.projectId, name);
+  } else {
+    saved = copyProjectFromSnapshot(snap, name);
+  }
+  state.projectId = saved.id;
+  state.projectName = saved.projectName;
+  state.readOnly = false;
+  state.catalogFile = null;
+  state.docName = saved.projectName;
+  state.docDescription = saved.description;
+  syncDocMetaForm();
+  syncDesignUi();
+  renderAll();
+  setStatus(`已另存为项目 ${saved.projectName}`);
+  showToast(`已另存为项目 ${saved.projectName}`, "success");
+  return true;
+}
+
+function assertProjectNameAvailable(projectName, existingId = null) {
+  const name = normalizeProjectName(projectName);
+  const taken = listProjects().some((p) => p.projectName === name && p.id !== existingId);
+  if (taken) throw new Error(`项目名称「${name}」已存在`);
+  return name;
+}
+
+function saveProjectWithName(projectName) {
+  const snap = collectProjectSnapshot();
+  if (!snap) return false;
+  snap.projectName = assertProjectNameAvailable(projectName, state.projectId);
+  snap.id = state.projectId || undefined;
+  const saved = saveProject(snap);
+  state.projectId = saved.id;
+  state.projectName = saved.projectName;
+  state.readOnly = false;
+  state.catalogFile = null;
+  state.docName = saved.projectName;
+  syncDocMetaForm();
+  syncDesignUi();
+  setStatus(`已保存项目 ${saved.projectName}`);
+  showToast(`已保存项目 ${saved.projectName}`, "success");
+  return true;
+}
+
+function createNewProject(projectName) {
+  const name = assertProjectNameAvailable(projectName);
+  const design = defaultSourceDoc();
+  design.name = name;
+  design.description = "";
+  const agent = defaultAgentChats();
+  const saved = saveProject({
+    projectName: name,
+    description: "",
+    design,
+    canvas: { ...DEFAULT_CANVAS },
+    agentChatList: agent.agentChatList,
+    currentAgentChat: agent.currentAgentChat,
+  });
+  openProjectRecord(saved);
+}
+
+function importJsonAsProject(doc, suggestedName) {
+  pendingProjectNameAction = "import";
+  pendingImportDoc = doc;
+  projectNameDialog?.open({
+    title: "导入为项目",
+    hint: "为导入的设计命名，将保存完整项目到 localStorage",
+    defaultName: suggestedName,
+    confirmText: "创建项目",
+  });
+}
+
+function importZipAsProject(payload) {
+  const agent = defaultAgentChats();
+  const saved = saveProject({
+    projectName: payload.projectName,
+    description: payload.description,
+    design: payload.design,
+    canvas: payload.canvas,
+    agentChatList: payload.agentChatList?.length ? payload.agentChatList : agent.agentChatList,
+    currentAgentChat: payload.currentAgentChat || agent.currentAgentChat,
+  });
+  openProjectRecord(saved);
+}
+
+let pendingProjectNameAction = "saveAs";
+let pendingImportDoc = null;
+let pendingCatalogDoc = null;
+let pendingCatalogItem = null;
+
+function openProjectNameDialog(mode = "save", options = {}) {
+  pendingProjectNameAction = mode;
+  if (mode !== "import") pendingImportDoc = null;
+  const isSaveAs = mode === "saveAs" || state.readOnly || (mode === "save" && !state.projectId);
+  const defaults = {
+    title:
+      mode === "fromCatalog"
+        ? "从内置模板创建项目"
+        : isSaveAs
+          ? "另存为项目"
+          : mode === "new"
+            ? "新建项目"
+            : "保存项目",
+    hint: "输入项目名称（不含 .json），将保存设计文件与 Agent 对话到 localStorage",
+    defaultName: state.projectName || state.docName || "my-project",
+    confirmText: mode === "new" || mode === "fromCatalog" ? "创建" : isSaveAs ? "另存为" : "保存",
+  };
+  projectNameDialog?.open({ ...defaults, ...options });
+}
+
+function openSaveAsDialog() {
+  openProjectNameDialog("saveAs");
+}
+
+function handleProjectNameConfirm(projectName) {
+  if (pendingProjectNameAction === "new") {
+    createNewProject(projectName);
+  } else if (pendingProjectNameAction === "save") {
+    saveProjectWithName(projectName);
+  } else if (pendingProjectNameAction === "fromCatalog" && pendingCatalogDoc) {
+    createProjectFromCatalog(projectName, pendingCatalogDoc, pendingCatalogItem);
+  } else if (pendingProjectNameAction === "import" && pendingImportDoc) {
+    const name = assertProjectNameAvailable(projectName);
+    const design = validateSourceDoc(pendingImportDoc);
+    design.name = name;
+    const agent = defaultAgentChats();
+    const saved = saveProject({
+      projectName: name,
+      description: design.description || "",
+      design,
+      canvas: { ...DEFAULT_CANVAS },
+      agentChatList: agent.agentChatList,
+      currentAgentChat: agent.currentAgentChat,
+    });
+    pendingImportDoc = null;
+    openProjectRecord(saved);
+  } else {
+    saveAsProject(projectName);
+  }
+}
+
+async function exportCurrentProjectZip() {
+  const snap = collectProjectSnapshot();
+  if (!snap) return false;
+  const name = snap.projectName || normalizeProjectName(state.docName || "project");
+  await exportProjectZip({ ...snap, projectName: name });
+  setStatus(`已导出项目 ${name}.zip`);
+  showToast(`已导出项目 ${name}.zip`, "success");
+  return true;
+}
+
+function exportCurrentDesignJson() {
+  const snap = collectProjectSnapshot();
+  if (!snap) return false;
+  const name = snap.projectName || normalizeProjectName(state.docName || "project");
+  exportDesignJson({ ...snap, projectName: name });
+  setStatus(`已导出设计文件 ${projectDesignFilename(name)}`);
+  showToast(`已导出 ${projectDesignFilename(name)}`, "success");
+  return true;
 }
 
 /** 离开源码 Tab 前将编辑器内容同步到音素/情绪数据 */
@@ -178,30 +528,6 @@ function applySourceEditorIfDirty() {
     showToast(`源码无效，无法同步: ${e.message || e}`, "error");
     return false;
   }
-}
-
-function saveSourceToLocalStorage(silent = true) {
-  localStorage.setItem(LS_SOURCE_KEY, JSON.stringify(getSourceDocObject()));
-  localStorage.setItem(LS_CANVAS_KEY, JSON.stringify(state.canvas));
-  if (!silent) {
-    setStatus("已保存到 localStorage");
-    showToast("已保存草稿到 localStorage", "success");
-  }
-  return true;
-}
-
-function loadSourceFromLocalStorage() {
-  const raw = localStorage.getItem(LS_SOURCE_KEY);
-  if (!raw) throw new Error("localStorage 中无草稿");
-  applyAgentSource(JSON.parse(raw), { from: "draft" });
-  const cv = localStorage.getItem(LS_CANVAS_KEY);
-  if (cv) {
-    state.canvas = JSON.parse(cv);
-    els.canvasW.value = state.canvas.w;
-    els.canvasH.value = state.canvas.h;
-  }
-  setStatus("已从 localStorage 恢复草稿");
-  showToast("已从 localStorage 恢复草稿", "success");
 }
 
 async function loadInitialSource() {
@@ -220,37 +546,18 @@ function getSourceDocText() {
 }
 
 function exportSourceFile() {
-  if ((state.tab === "phoneme" || state.tab === "scene") && !applyExpressionMetaFromForm()) {
-    return false;
-  }
-  applyDocMetaFromForm();
-  const doc = validateSourceDoc(getSourceDocObject());
-  const phDups = findExpressionKeyConflicts(doc.phonemes);
-  const emDups = findExpressionKeyConflicts(doc.emotions);
-  if (phDups.length) {
-    showToast(formatExpressionConflictError(phDups, doc.phonemes), "error");
-    return false;
-  }
-  if (emDups.length) {
-    showToast(formatExpressionConflictError(emDups, doc.emotions), "error");
-    return false;
-  }
-  const filename = slugifyFilename(state.docName, state.exportFilename);
-  downloadJson(filename, doc);
-  state.exportFilename = filename;
-  setStatus(`已导出 ${filename}`);
-  showToast(`已导出 ${filename}`, "success");
-  return true;
+  return exportCurrentDesignJson();
 }
 
 async function importSourceFile(file) {
-  applyAgentSource(validateSourceDoc(await readJsonFile(file)), {
-    file: file.name,
-    from: "import",
-  });
-  setStatus(`已导入 ${file.name}`);
-  showToast(`已导入 ${file.name}`, "success");
-  startScenePlayback();
+  try {
+    const doc = validateSourceDoc(await readJsonFile(file));
+    const base = file.name.replace(/\.json$/i, "") || "project";
+    importJsonAsProject(doc, base);
+  } catch (e) {
+    setStatus(String(e.message || e), true);
+    showToast(String(e.message || e), "error");
+  }
 }
 
 function $(id) {
@@ -856,6 +1163,20 @@ function renderColorPalette() {
   });
 }
 
+function syncCanvasDisplaySize() {
+  const canvas = els.canvas;
+  if (!canvas) return;
+  const displayW = state.canvas.w * CANVAS_DISPLAY_SCALE;
+  const displayH = state.canvas.h * CANVAS_DISPLAY_SCALE;
+  canvas.style.width = `${displayW}px`;
+  canvas.style.height = `${displayH}px`;
+  const root = document.documentElement;
+  root.style.setProperty("--canvas-display-w", `${displayW}px`);
+  if (els.frameTimeline) {
+    els.frameTimeline.style.maxWidth = `${displayW}px`;
+  }
+}
+
 function renderCanvas() {
   const canvas = els.canvas;
   if (!canvas) return;
@@ -869,6 +1190,7 @@ function renderCanvas() {
     highlights: state.selection.items.filter((i) => isLayerEditable(i.layer)),
     lockedLayers: getLockedLayers(),
   });
+  syncCanvasDisplaySize();
 }
 
 function renderPhonemeList() {
@@ -1047,7 +1369,7 @@ function saveJsonEditor() {
     }
     state.jsonEditorDirty = false;
     clampFrameIdx();
-    saveSourceToLocalStorage(true);
+    autosaveProjectIfNeeded(true);
     renderAll();
     showToast("已保存 JSON", "success");
   } catch (e) {
@@ -1121,9 +1443,19 @@ function formatSourceEditor() {
 }
 
 function saveSourceEditor() {
+  if (state.readOnly) {
+    showToast("内置模板只读，请另存为后再保存", "error");
+    return;
+  }
   try {
-    applyAgentSource(JSON.parse(els.sourceEditor.value));
-    showToast("已保存并同步到音素/情绪表情", "success");
+    applySourceDocToState(JSON.parse(els.sourceEditor.value));
+    renderAll();
+    if (state.projectId && state.projectName) {
+      autosaveProjectIfNeeded(false);
+      showToast("已保存并同步到音素/情绪表情", "success");
+    } else {
+      openProjectNameDialog("save");
+    }
   } catch (e) {
     showToast(`JSON 无效: ${e.message || e}`, "error");
   }
@@ -1132,6 +1464,7 @@ function saveSourceEditor() {
 function renderAll() {
   pruneSelection();
   syncDocMetaForm();
+  syncDesignUi();
   syncStageVisibility();
   renderPhonemeList();
   renderSceneList();
@@ -1158,6 +1491,7 @@ function renderAll() {
     els.canvasMeta.textContent = `${state.canvas.w} × ${state.canvas.h}`;
   }
   agentPanel?.refresh();
+  scheduleAutosave();
 }
 
 function canvasPoint(ev) {
@@ -1413,10 +1747,12 @@ function bindUi() {
 
   els.canvasW.onchange = () => {
     state.canvas.w = Math.max(64, Number(els.canvasW.value) || 284);
+    syncCanvasDisplaySize();
     renderAll();
   };
   els.canvasH.onchange = () => {
     state.canvas.h = Math.max(64, Number(els.canvasH.value) || 240);
+    syncCanvasDisplaySize();
     renderAll();
   };
 
@@ -1475,34 +1811,6 @@ function bindUi() {
   bindMetaField(els.eTitle, () => applyExpressionMetaFromForm());
   bindMetaField(els.eAlias, () => applyExpressionMetaFromForm());
 
-  $("btn-export-phoneme").onclick = () => exportSourceFile();
-  $("btn-import-phoneme").onclick = () => els.importPhoneme.click();
-  els.importPhoneme.onchange = async () => {
-    const f = els.importPhoneme.files?.[0];
-    if (!f) return;
-    try {
-      await importSourceFile(f);
-    } catch (e) {
-      setStatus(String(e.message || e), true);
-      showToast(String(e.message || e), "error");
-    }
-    els.importPhoneme.value = "";
-  };
-
-  $("btn-export-scenes").onclick = () => exportSourceFile();
-  $("btn-import-scenes").onclick = () => els.importScenes.click();
-  els.importScenes.onchange = async () => {
-    const f = els.importScenes.files?.[0];
-    if (!f) return;
-    try {
-      await importSourceFile(f);
-    } catch (e) {
-      setStatus(String(e.message || e), true);
-      showToast(String(e.message || e), "error");
-    }
-    els.importScenes.value = "";
-  };
-
   $("btn-add-scene").onclick = () => {
     const name = `expr_${Date.now().toString(36).slice(-6)}`;
     state.emotionExpressions.push(defaultExpression(name, "新表情", []));
@@ -1511,51 +1819,26 @@ function bindUi() {
     renderAll();
   };
 
-  $("btn-add-preset").onclick = () => {
-    const sel = els.presetSelect.value;
-    const preset = EMOTION_PRESETS.find((p) => p.name === sel);
-    if (!preset) return;
-    if (state.emotionExpressions.some((s) => s.name === preset.name)) {
-      showToast(`表情 ${preset.name} 已存在`, "error");
-      return;
-    }
-    state.emotionExpressions.push(defaultScene(preset));
-    state.selectedEmotionIdx = state.emotionExpressions.length - 1;
-    state.jsonEditorDirty = false;
-    renderAll();
-    showToast(`已添加预设：${preset.title}`, "success");
-  };
-
-  $("btn-save-local").onclick = () => {
-    if ((state.tab === "phoneme" || state.tab === "scene") && !applyExpressionMetaFromForm()) return;
-    applyDocMetaFromForm();
-    saveSourceToLocalStorage(false);
-  };
+  $("btn-save-design")?.addEventListener("click", () => saveCurrentProject());
+  $("btn-save-as")?.addEventListener("click", () => openSaveAsDialog());
+  $("btn-export-project")?.addEventListener("click", () => exportCurrentProjectZip());
+  $("btn-export-design")?.addEventListener("click", () => exportCurrentDesignJson());
 
   bindMetaField(els.docName, () => {
     applyDocMetaFromForm();
-    saveSourceToLocalStorage(true);
+    autosaveProjectIfNeeded(true);
+    syncDesignUi();
   });
   bindMetaField(els.docDescription, () => {
     applyDocMetaFromForm();
-    saveSourceToLocalStorage(true);
+    autosaveProjectIfNeeded(true);
   });
   $("btn-open-picker")?.addEventListener("click", () => projectPicker?.show());
-
-  $("btn-load-local").onclick = () => {
-    try {
-      loadSourceFromLocalStorage();
-    } catch (e) {
-      setStatus(String(e.message || e), true);
-      showToast(String(e.message || e), "error");
-    }
-  };
 
   document.querySelectorAll(".json-mode-btn").forEach((btn) => {
     btn.onclick = () => switchJsonEditorMode(btn.dataset.mode);
   });
   $("btn-format-json")?.addEventListener("click", () => formatJsonEditor());
-  $("btn-save-json")?.addEventListener("click", () => saveJsonEditor());
   els.jsonEditor?.addEventListener("input", () => {
     state.jsonEditorDirty = true;
   });
@@ -1627,22 +1910,15 @@ async function boot() {
   els.sourceFindInput = $("source-find-input");
   els.sourceFindStatus = $("source-find-status");
   els.stage = document.querySelector(".stage");
-  els.importPhoneme = $("import-phoneme");
-  els.importScenes = $("import-scenes");
   els.importSource = $("import-source");
-  els.presetSelect = $("preset-select");
   els.docName = $("doc-name");
   els.docDescription = $("doc-description");
+  els.docFileLabel = $("doc-file-label");
+  els.docReadonlyBadge = $("doc-readonly-badge");
+  els.btnSaveDesign = $("btn-save-design");
 
   els.canvasW.value = state.canvas.w;
   els.canvasH.value = state.canvas.h;
-
-  EMOTION_PRESETS.forEach((p) => {
-    const opt = document.createElement("option");
-    opt.value = p.name;
-    opt.textContent = `${p.title} — ${p.desc}`;
-    els.presetSelect.appendChild(opt);
-  });
 
   await loadInitialSource();
 
@@ -1667,16 +1943,39 @@ async function boot() {
   agentPanel = initAgentPanel({
     getAgentContext,
     applySourceDoc: (doc) => applyAgentSource(doc),
+    onAgentStateChange: () => scheduleAutosave(),
   });
   projectPicker = createProjectPicker({
-    onOpen(doc, meta) {
-      applySourceDocToState(doc, meta);
-      renderAll();
-      setStatus(`已打开：${state.docName}`);
-      showToast(`已打开：${state.docName}`, "success");
+    onOpenProject(project) {
+      openProjectRecord(project);
+    },
+    onSelectCatalog(doc, item) {
+      beginCatalogProject(doc, item);
+    },
+    onNewProject() {
+      openProjectNameDialog("new");
+    },
+    onImportJson(doc, base) {
+      importJsonAsProject(doc, base);
+    },
+    onImportZip(payload) {
+      importZipAsProject(payload);
+    },
+    onDeleteProject(id) {
+      handleDeleteProject(id);
+    },
+    onDraftsCleaned(count) {
+      showToast(`已删除 ${count} 个 draft 草稿项目`, "success");
+      setStatus(`已清理 ${count} 个 draft 草稿项目`);
     },
     onError(e) {
       setStatus(String(e.message || e), true);
+      showToast(String(e.message || e), "error");
+    },
+  });
+  projectNameDialog = createProjectNameDialog({
+    onConfirm: (projectName) => handleProjectNameConfirm(projectName),
+    onError(e) {
       showToast(String(e.message || e), "error");
     },
   });
