@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VisemeSync · 口型与表情设计</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>VisemeSync</h1>
+      <p class="sub">Deskbot 音素表情 / 情绪表情设计 · 导出 JSON</p>
+    </div>
+    <div class="top-actions">
+      <label class="inline">宽<input id="canvas-w" type="number" min="64" max="512" value="284" /></label>
+      <label class="inline">高<input id="canvas-h" type="number" min="64" max="512" value="240" /></label>
+      <span id="canvas-meta" class="mono muted">284 × 240</span>
+      <button type="button" class="btn" id="btn-save-local">暂存</button>
+      <button type="button" class="btn secondary" id="btn-load-local">恢复</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button type="button" class="tab-btn active" data-tab="phoneme">音素表情</button>
+    <button type="button" class="tab-btn" data-tab="scene">情绪表情</button>
+    <button type="button" class="tab-btn" data-tab="source">源码文件</button>
+  </nav>
+
+  <main class="layout">
+    <aside class="sidebar left">
+      <section class="panel-tab" data-panel="phoneme">
+        <div class="panel-head">
+          <h2>音素表情</h2>
+          <div class="row">
+            <button type="button" class="btn sm" id="btn-add-phoneme">+ 表情</button>
+            <button type="button" class="btn sm danger" id="btn-del-phoneme">删</button>
+          </div>
+        </div>
+        <div id="phoneme-list" class="list"></div>
+        <div id="phoneme-meta" class="meta-form">
+          <label>name<input id="p-name" type="text" placeholder="a" /></label>
+          <label>title<input id="p-title" type="text" placeholder="音素 a" /></label>
+          <label>alias<textarea id="p-alias" rows="2" placeholder="an, ang（逗号分隔）"></textarea></label>
+          <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情 · 与情绪表情共用 <code>source.json</code></p>
+        </div>
+        <div class="io-row">
+          <button type="button" class="btn primary" id="btn-export-phoneme">导出 source.json</button>
+          <button type="button" class="btn secondary" id="btn-import-phoneme">导入</button>
+          <input id="import-phoneme" type="file" accept="application/json,.json" hidden />
+        </div>
+      </section>
+
+      <section class="panel-tab hidden" data-panel="scene">
+        <div class="panel-head">
+          <h2>情绪表情</h2>
+          <button type="button" class="btn sm" id="btn-add-scene">+ 表情</button>
+        </div>
+        <div id="scene-list" class="list"></div>
+        <div id="scene-meta" class="meta-form">
+          <label>name<input id="e-name" type="text" placeholder="idle" /></label>
+          <label>title<input id="e-title" type="text" placeholder="日常待机" /></label>
+          <label>alias<textarea id="e-alias" rows="2" placeholder="standby（逗号分隔）"></textarea></label>
+          <p class="hint">匹配 <code>name</code> 或 <code>alias</code> 中任一项即命中此表情 · 与音素表情共用 <code>source.json</code></p>
+        </div>
+        <div class="preset-row">
+          <select id="preset-select"></select>
+          <button type="button" class="btn sm" id="btn-add-preset">添加预设</button>
+        </div>
+        <div class="io-row">
+          <button type="button" class="btn primary" id="btn-export-scenes">导出 source.json</button>
+          <button type="button" class="btn secondary" id="btn-import-scenes">导入</button>
+          <input id="import-scenes" type="file" accept="application/json,.json" hidden />
+        </div>
+      </section>
+
+      <section class="panel-tab hidden" data-panel="source">
+        <div class="panel-head">
+          <h2>源码文件</h2>
+        </div>
+        <p class="hint">音素与情绪共用 <code>source.json</code> · 切换 Tab 或点「保存」时自动同步 · 固定显示 64 行 · <kbd>Ctrl</kbd>+F 查找</p>
+        <div class="io-row source-actions">
+          <button type="button" class="btn sm" id="btn-copy-source">复制</button>
+          <button type="button" class="btn sm" id="btn-format-source">格式化</button>
+          <button type="button" class="btn sm primary" id="btn-save-source">保存</button>
+          <button type="button" class="btn sm" id="btn-export-source">导出</button>
+          <button type="button" class="btn sm secondary" id="btn-import-source">导入</button>
+          <input id="import-source" type="file" accept="application/json,.json" hidden />
+        </div>
+      </section>
+
+      <section class="json-editor-section">
+        <div class="json-editor-head">
+          <h3>当前表情 JSON</h3>
+          <div class="json-editor-actions">
+            <button type="button" class="btn sm json-mode-btn active" data-mode="json">JSON 视图</button>
+            <button type="button" class="btn sm json-mode-btn" data-mode="text">文本视图</button>
+            <button type="button" class="btn sm" id="btn-format-json">格式化</button>
+            <button type="button" class="btn sm primary" id="btn-save-json">保存</button>
+          </div>
+        </div>
+        <div id="json-tree" class="json-tree"></div>
+        <textarea id="json-editor" class="json-editor hidden" spellcheck="false" placeholder="文本视图：可编辑 JSON…"></textarea>
+        <p class="hint">JSON 视图：树状只读浏览 · 文本视图：可编辑，格式化按 2 空格缩进 · 修改后点保存</p>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div id="stage-edit">
+      <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="face-canvas" width="284" height="240"></canvas>
+        <div id="marquee-box" class="marquee-box hidden"></div>
+      </div>
+      <p class="canvas-hint">拖图元到画布 · 空白处框选 · 方向键平移 · <kbd>Ctrl</kbd>+C/V · <kbd>Del</kbd> 删除</p>
+      <div class="toolbar">
+        <label>当前图层
+          <select id="layer-select">
+            <option value="mouth">嘴巴</option>
+            <option value="eye_l">左眼</option>
+            <option value="eye_r">右眼</option>
+            <option value="nose">鼻子</option>
+            <option value="extra">附加</option>
+          </select>
+        </label>
+        <span id="layer-lock-hint" class="layer-lock-hint"></span>
+      </div>
+      <section id="frame-timeline" class="frame-timeline hidden">
+        <div class="frame-timeline-head">
+          <h3>动画帧</h3>
+          <div class="frame-timeline-actions">
+            <button type="button" class="btn sm primary" id="btn-play-scene">▶ 播放</button>
+            <button type="button" class="btn sm" id="btn-add-frame">+ 帧</button>
+            <button type="button" class="btn sm danger" id="btn-del-frame">删选中帧</button>
+            <label class="inline">时长 ms<input id="frame-ms" type="number" min="16" step="16" value="800" /></label>
+            <span class="mono muted">总时长 <span id="frame-total-ms">0 ms</span></span>
+          </div>
+        </div>
+        <div id="frame-track" class="frame-track"></div>
+        <p class="hint">平铺时间轴 · 拖动帧间间隔条调节毫秒 · 选中帧后删除 · 末段为停顿时长</p>
+      </section>
+      </div>
+
+      <div id="stage-source" class="stage-source hidden">
+        <div id="source-find-bar" class="source-find-bar hidden">
+          <label class="source-find-label">查找
+            <input id="source-find-input" type="text" placeholder="输入关键字…" spellcheck="false" />
+          </label>
+          <span id="source-find-status" class="mono muted"></span>
+          <button type="button" class="btn sm" id="source-find-prev" title="上一个 (Shift+Enter)">↑</button>
+          <button type="button" class="btn sm" id="source-find-next" title="下一个 (Enter)">↓</button>
+          <button type="button" class="btn sm" id="source-find-close" title="关闭 (Esc)">×</button>
+        </div>
+        <div class="source-editor-shell">
+          <div id="source-line-gutter" class="source-line-gutter" aria-hidden="true">
+            <pre id="source-line-numbers">1</pre>
+          </div>
+          <textarea id="source-editor" class="source-editor" spellcheck="false" placeholder="源码 JSON…"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar right">
+      <div class="right-pair">
+        <div class="right-tools">
+          <section id="play-preview" class="right-section play-preview">
+            <h2>播放预览</h2>
+            <div class="play-canvas-wrap">
+              <canvas id="play-canvas" width="284" height="240"></canvas>
+            </div>
+            <p id="play-time-label" class="mono muted play-time">0 / 0 ms</p>
+            <button type="button" class="btn sm danger hidden" id="btn-stop-play">停止播放</button>
+          </section>
+
+          <section class="right-section shape-section">
+            <h2>图元库</h2>
+            <p class="hint">拖到画布添加 · 双击快速添加到画布中心</p>
+            <div id="shape-palette" class="shape-palette"></div>
+          </section>
+
+          <section class="right-section color-section">
+            <h2>颜色</h2>
+            <p class="hint">自定色可任意选取，写入 JSON 时自动量化为 256 色 (RGB332)</p>
+            <div id="color-palette" class="color-palette"></div>
+            <label class="color-custom">自定义
+              <input id="color-custom-input" type="color" value="#ffffff" />
+              <span id="color-custom-label" class="mono muted">#ffffff · 65535</span>
+            </label>
+          </section>
+
+          <section class="right-section props-section">
+            <h2>图元属性</h2>
+            <div id="props-panel" class="props"></div>
+          </section>
+        </div>
+
+        <section id="agent-panel" class="agent-panel">
+          <div class="agent-resize-handle" title="拖动调整宽度"></div>
+          <header class="agent-panel-head">
+            <div class="agent-head-row">
+              <button type="button" class="btn sm" id="agent-panel-toggle">收起</button>
+              <span id="agent-focus-hint" class="agent-focus-hint muted"></span>
+            </div>
+            <div class="agent-config-inline">
+              <label class="agent-field-row"><span class="agent-field-label">Key</span><input id="agent-api-key" type="password" placeholder="sk-..." autocomplete="off" /></label>
+              <label class="agent-field-row"><span class="agent-field-label">URL</span><input id="agent-base-url" type="text" placeholder="https://api.openai.com/v1" /></label>
+              <label class="agent-field-row"><span class="agent-field-label">Model</span><input id="agent-model" type="text" placeholder="gpt-4o-mini" /></label>
+              <label class="agent-field-row"><span class="agent-field-label">T</span><input id="agent-temperature" type="number" min="0" max="2" step="0.1" value="0.3" title="temperature" /></label>
+              <button type="button" class="btn sm" id="agent-save-config">保存</button>
+            </div>
+          </header>
+          <div class="agent-panel-body">
+            <section class="agent-chat">
+              <div class="agent-sessions-bar">
+                <div id="agent-session-list" class="agent-session-list"></div>
+                <button type="button" class="btn sm" id="agent-new-session" title="新建对话">+</button>
+              </div>
+              <div id="agent-messages" class="agent-messages"></div>
+              <div class="agent-compose">
+                <textarea id="agent-input" rows="5" placeholder="描述表情变化，Enter 发送…"></textarea>
+                <button type="button" class="btn primary" id="agent-send">发送</button>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="status-bar" class="status">就绪</footer>
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1160 @@
+{
+  "phoneme_expressions": [
+    {
+      "name": "i",
+      "alias": [
+        "ia",
+        "ian",
+        "iang",
+        "iao",
+        "ie",
+        "in",
+        "ing",
+        "iong",
+        "iou",
+        "iu"
+      ],
+      "title": "i, ia, ian",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 207,
+                "y": 156,
+                "w": 76,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "u",
+      "alias": [
+        "ua",
+        "uan",
+        "uang",
+        "uo",
+        "v",
+        "ve"
+      ],
+      "title": "u, ua, uan",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 229,
+                "y": 150,
+                "w": 32,
+                "h": 25,
+                "radius": 12,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "a",
+      "alias": [
+        "an",
+        "ang"
+      ],
+      "title": "a, an, ang",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 218,
+                "y": 149,
+                "w": 54,
+                "h": 26,
+                "radius": 13,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "ai",
+      "alias": [
+        "uai"
+      ],
+      "title": "ai, uai",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 217,
+                "y": 146,
+                "w": 57,
+                "h": 32,
+                "radius": 16,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "ao",
+      "alias": [],
+      "title": "ao",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 215,
+                "y": 143,
+                "w": 60,
+                "h": 38,
+                "radius": 19,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "e",
+      "alias": [
+        "ei",
+        "en",
+        "eng",
+        "er",
+        "o",
+        "ong"
+      ],
+      "title": "e, ei, en",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 212,
+                "y": 150,
+                "w": 66,
+                "h": 23,
+                "radius": 11,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "ou",
+      "alias": [],
+      "title": "ou",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 224,
+                "y": 149,
+                "w": 42,
+                "h": 26,
+                "radius": 13,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "b",
+      "alias": [
+        "m",
+        "p"
+      ],
+      "title": "b, m, p",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 212,
+                "y": 159,
+                "w": 66,
+                "h": 8,
+                "radius": 4,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "f",
+      "alias": [],
+      "title": "f",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 212,
+                "y": 156,
+                "w": 66,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "d",
+      "alias": [
+        "t"
+      ],
+      "title": "d, t",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 215,
+                "y": 156,
+                "w": 60,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "n",
+      "alias": [],
+      "title": "n",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 214,
+                "y": 155,
+                "w": 62,
+                "h": 14,
+                "radius": 7,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "l",
+      "alias": [],
+      "title": "l",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 215,
+                "y": 153,
+                "w": 60,
+                "h": 18,
+                "radius": 9,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "g",
+      "alias": [
+        "k"
+      ],
+      "title": "g, k",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 222,
+                "y": 150,
+                "w": 46,
+                "h": 23,
+                "radius": 11,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "h",
+      "alias": [],
+      "title": "h",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 218,
+                "y": 146,
+                "w": 54,
+                "h": 32,
+                "radius": 16,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "j",
+      "alias": [
+        "q",
+        "x"
+      ],
+      "title": "j, q, x",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 215,
+                "y": 153,
+                "w": 60,
+                "h": 18,
+                "radius": 9,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "zh",
+      "alias": [],
+      "title": "zh",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 218,
+                "y": 150,
+                "w": 54,
+                "h": 23,
+                "radius": 11,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "ch",
+      "alias": [],
+      "title": "ch",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 217,
+                "y": 155,
+                "w": 57,
+                "h": 14,
+                "radius": 7,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "sh",
+      "alias": [],
+      "title": "sh",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 219,
+                "y": 152,
+                "w": 51,
+                "h": 19,
+                "radius": 9,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "r",
+      "alias": [],
+      "title": "r",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 227,
+                "y": 152,
+                "w": 35,
+                "h": 19,
+                "radius": 9,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "c",
+      "alias": [
+        "s",
+        "z"
+      ],
+      "title": "c, s, z",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 211,
+                "y": 156,
+                "w": 67,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "w",
+      "alias": [],
+      "title": "w",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 225,
+                "y": 150,
+                "w": 39,
+                "h": 23,
+                "radius": 11,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "y",
+      "alias": [],
+      "title": "y",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 208,
+                "y": 156,
+                "w": 74,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "AA",
+      "alias": [
+        "AE",
+        "AH",
+        "AO",
+        "AW",
+        "AY",
+        "EH",
+        "ER",
+        "EY",
+        "OW",
+        "OY",
+        "UH",
+        "UW"
+      ],
+      "title": "AA, AE, AH",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 207,
+                "y": 149,
+                "w": 76,
+                "h": 26,
+                "radius": 13,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "IH",
+      "alias": [
+        "IX",
+        "IY",
+        "Y"
+      ],
+      "title": "IH, IX, IY",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 207,
+                "y": 156,
+                "w": 76,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "_",
+      "alias": [
+        "B",
+        "CH",
+        "D",
+        "DH",
+        "F",
+        "G",
+        "H",
+        "JH",
+        "K",
+        "L",
+        "M",
+        "N",
+        "P",
+        "R",
+        "S",
+        "SH",
+        "T",
+        "TH",
+        "V",
+        "W",
+        "Z",
+        "pau"
+      ],
+      "title": "_, B, CH",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 222,
+                "y": 156,
+                "w": 46,
+                "h": 13,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "_",
+      "alias": [],
+      "title": "_",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [],
+            "eye_r": [],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 225,
+                "y": 156,
+                "w": 40,
+                "h": 12,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    }
+  ],
+  "emotion_expressions": [
+    {
+      "name": "default",
+      "title": "默认",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 97,
+                "rw": 17,
+                "rh": 17,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 97,
+                "rw": 17,
+                "rh": 17,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 178,
+                "y": 156,
+                "w": 40,
+                "h": 12,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "idle",
+      "title": "日常",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 97,
+                "rw": 17,
+                "rh": 17,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 97,
+                "rw": 17,
+                "rh": 17,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 178,
+                "y": 156,
+                "w": 40,
+                "h": 12,
+                "radius": 6,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "happy",
+      "title": "开心",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 97,
+                "rw": 17,
+                "rh": 12,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 97,
+                "rw": 17,
+                "rh": 12,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 170,
+                "y": 158,
+                "w": 56,
+                "h": 14,
+                "radius": 7,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "shy",
+      "title": "害羞",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 97,
+                "rw": 17,
+                "rh": 17,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 97,
+                "rw": 17,
+                "rh": 17,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 185,
+                "y": 158,
+                "w": 28,
+                "h": 8,
+                "radius": 4,
+                "c": 19605
+              }
+            ],
+            "extra": [
+              {
+                "shape": "ellipse_fill",
+                "x": 62,
+                "y": 133,
+                "rw": 9,
+                "rh": 4,
+                "c": 65535
+              },
+              {
+                "shape": "ellipse_fill",
+                "x": 222,
+                "y": 133,
+                "rw": 9,
+                "rh": 4,
+                "c": 65535
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "angry",
+      "title": "生气",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 99,
+                "rw": 17,
+                "rh": 10,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 99,
+                "rw": 17,
+                "rh": 10,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 168,
+                "y": 162,
+                "w": 60,
+                "h": 8,
+                "radius": 4,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "curious",
+      "title": "好奇",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 97,
+                "rw": 20,
+                "rh": 17,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 97,
+                "rw": 20,
+                "rh": 17,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 182,
+                "y": 154,
+                "w": 32,
+                "h": 18,
+                "radius": 9,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "alert",
+      "title": "警惕",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 96,
+                "rw": 17,
+                "rh": 8,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 96,
+                "rw": 17,
+                "rh": 8,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 172,
+                "y": 160,
+                "w": 52,
+                "h": 6,
+                "radius": 3,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "surprised",
+      "title": "惊讶",
+      "frames": [
+        {
+          "ms": 800,
+          "elements": {
+            "eye_l": [
+              {
+                "shape": "ellipse_fill",
+                "x": 86,
+                "y": 97,
+                "rw": 22,
+                "rh": 22,
+                "c": 32348
+              }
+            ],
+            "eye_r": [
+              {
+                "shape": "ellipse_fill",
+                "x": 198,
+                "y": 97,
+                "rw": 22,
+                "rh": 22,
+                "c": 28122
+              }
+            ],
+            "nose": [],
+            "mouth": [
+              {
+                "shape": "round_rect_outline",
+                "x": 184,
+                "y": 148,
+                "w": 24,
+                "h": 28,
+                "radius": 12,
+                "c": 19605
+              }
+            ],
+            "extra": []
+          }
+        }
+      ]
+    }
+  ]
+}
