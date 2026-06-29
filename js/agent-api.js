@@ -106,6 +106,9 @@ export async function streamChatCompletion(config, messages, tools, handlers = {
         const delta = json.choices?.[0]?.delta;
         if (!delta) continue;
 
+        // 忽略 reasoning / thinking 流（避免重复刷屏，仅保留最终回复）
+        if (delta.reasoning_content || delta.reasoning || delta.type === "reasoning") continue;
+
         if (delta.content) {
           content += delta.content;
           handlers.onContent?.(delta.content, content);
